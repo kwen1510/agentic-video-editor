@@ -2,9 +2,19 @@
 
 import React, {useEffect, useMemo, useRef, useState} from 'react';
 import {Copy, Film, Loader2, Music2, Plus, Scissors, Sparkles, Trash2, Wand2, X} from 'lucide-react';
+import {openingTemplateOptions} from '@/components/remotion/OpeningTemplates';
 import {formatTime, getClipTimelineWindows, getContentEnd, getOpeningDuration, getTimelineDuration, sortedVolumePoints} from '@/lib/timeline';
 import {useEditorStore} from '@/store/editorStore';
-import type {EndingScreen, EndingTemplateId, MusicTrack, TimelineLayer, TimelineTransition, TransitionStyle} from '@/types/timeline';
+import type {
+  EndingScreen,
+  EndingTemplateId,
+  MusicTrack,
+  OpeningScreen,
+  OpeningTemplateId,
+  TimelineLayer,
+  TimelineTransition,
+  TransitionStyle,
+} from '@/types/timeline';
 
 const minDuration = 0.25;
 const rulerHeight = 26;
@@ -107,6 +117,8 @@ type RenderBriefResponse = {
   error?: string;
 };
 
+type TimelineModal = 'opening' | 'transition' | 'ending' | 'layer' | null;
+
 export const TimelinePanel: React.FC = () => {
   const project = useEditorStore((state) => state.project);
   const currentTime = useEditorStore((state) => state.currentTime);
@@ -127,8 +139,10 @@ export const TimelinePanel: React.FC = () => {
   const updateAllSourceAudio = useEditorStore((state) => state.updateAllSourceAudio);
   const upsertTransition = useEditorStore((state) => state.upsertTransition);
   const removeTransition = useEditorStore((state) => state.removeTransition);
+  const setOpeningScreen = useEditorStore((state) => state.setOpeningScreen);
   const setEndingScreen = useEditorStore((state) => state.setEndingScreen);
   const [selectedTransitionId, setSelectedTransitionId] = useState<string | null>(null);
+  const [timelineModal, setTimelineModal] = useState<TimelineModal>(null);
   const [renderBusy, setRenderBusy] = useState(false);
   const [renderPrompt, setRenderPrompt] = useState('');
   const [renderPaths, setRenderPaths] = useState<RenderBriefResponse['paths'] | null>(null);
@@ -150,6 +164,7 @@ export const TimelinePanel: React.FC = () => {
   const duration = Math.max(1, getTimelineDuration(project));
   const openingDuration = getOpeningDuration(project);
   const contentEnd = getContentEnd(project);
+  const activeOpeningScreen = project.openingScreen;
   const activeEndingScreen = project.endingScreen ?? defaultEndingScreen;
 
   const {visualRows, visualTracks} = useMemo<{visualRows: VisualRow[]; visualTracks: VisualTrack[]}>(() => {
@@ -295,12 +310,13 @@ export const TimelinePanel: React.FC = () => {
       };
     });
   }, [project]);
+  const selectedTransitionBoundary = transitionBoundaries.find((boundary) => boundary.id === selectedTransitionId) ?? null;
 
   useEffect(() => {
-    if (selectedLayer?.type === 'caption') {
+    if (timelineModal === 'layer' && selectedLayer?.type === 'caption') {
       selectedEditorRef.current?.focus();
     }
-  }, [selectedLayer?.id, selectedLayer?.type]);
+  }, [selectedLayer?.id, selectedLayer?.type, timelineModal]);
 
   useEffect(() => {
     if (selectedTransitionId && !selectedTransition) {
@@ -430,14 +446,6 @@ export const TimelinePanel: React.FC = () => {
 
   const endDrag = () => finishDrag();
 
-  const editLayerText = (layer: TimelineLayer) => {
-    const nextText = window.prompt(layer.type === 'caption' ? 'Edit caption text' : 'Edit layer text', layer.text);
-    if (nextText !== null) {
-      updateLayer(layer.id, {text: nextText});
-      selectLayer(layer.id);
-    }
-  };
-
   const openEditorPanel = (tab: 'clips' | 'music') => {
     window.dispatchEvent(new CustomEvent('agentic-video-editor:open-panel', {detail: {tab}}));
   };
@@ -491,6 +499,23 @@ export const TimelinePanel: React.FC = () => {
     upsertTransition(transition);
     setSelectedTransitionId(transition.id);
     setCurrentTime(boundary.boundaryTime);
+    setTimelineModal('transition');
+  };
+
+  const activateTransitionAfterCurrentClip = () => {
+    const windows = getClipTimelineWindows(project);
+    const selectedIndex = selectedClipId ? windows.findIndex(({clip}) => clip.id === selectedClipId) : -1;
+    const scrubberIndex = windows.findIndex(({start, end}) => currentTime >= start && currentTime <= end);
+    const targetIndex = scrubberIndex >= 0 ? scrubberIndex : selectedIndex;
+    const boundary = targetIndex >= 0 ? transitionBoundaries[targetIndex] : null;
+
+    if (!boundary) {
+      setRenderError('Select a clip, or move the scrubber onto a clip that has another clip after it.');
+      window.setTimeout(() => setRenderError(null), 2200);
+      return;
+    }
+
+    activateTransition(boundary);
   };
 
   const updateSelectedTransition = (patch: Partial<TimelineTransition>) => {
@@ -498,6 +523,18 @@ export const TimelinePanel: React.FC = () => {
       return;
     }
     upsertTransition({...selectedTransition, ...patch});
+  };
+
+  const updateOpeningScreen = (patch: Partial<OpeningScreen>, propsPatch?: Partial<OpeningScreen['props']>) => {
+    const current = project.openingScreen;
+    setOpeningScreen({
+      ...current,
+      ...patch,
+      props: {
+        ...current.props,
+        ...(propsPatch ?? {}),
+      },
+    });
   };
 
   const updateEndingScreen = (patch: Partial<EndingScreen>, propsPatch?: Partial<EndingScreen['props']>) => {
@@ -512,9 +549,16 @@ export const TimelinePanel: React.FC = () => {
     });
   };
 
-  const enableEndingScreen = () => {
+  const openOpeningModal = () => {
+    updateOpeningScreen({enabled: true});
+    setCurrentTime(0);
+    setTimelineModal('opening');
+  };
+
+  const openEndingModal = () => {
     updateEndingScreen({enabled: true});
     setCurrentTime(contentEnd);
+    setTimelineModal('ending');
   };
 
   const blockStyle = (start: number, end: number, row: number) => ({
@@ -553,7 +597,26 @@ export const TimelinePanel: React.FC = () => {
             Render with Codex
           </button>
           <button
-            onClick={enableEndingScreen}
+            onClick={openOpeningModal}
+            className={`inline-flex items-center gap-1.5 rounded border px-3 py-2 text-[11px] font-black ${
+              activeOpeningScreen.enabled
+                ? 'border-emerald-300/50 bg-emerald-300 text-slate-950'
+                : 'border-slate-700 bg-slate-950 text-slate-300 hover:bg-slate-800'
+            }`}
+          >
+            <Plus size={13} />
+            {activeOpeningScreen.enabled ? 'Start' : 'Add start'}
+          </button>
+          <button
+            disabled={project.clips.length < 2}
+            onClick={activateTransitionAfterCurrentClip}
+            className="inline-flex items-center gap-1.5 rounded border border-slate-700 bg-slate-950 px-3 py-2 text-[11px] font-black text-slate-300 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-35"
+          >
+            <Scissors size={13} />
+            Add transition
+          </button>
+          <button
+            onClick={openEndingModal}
             className={`inline-flex items-center gap-1.5 rounded border px-3 py-2 text-[11px] font-black ${
               activeEndingScreen.enabled
                 ? 'border-teal-300/50 bg-teal-300 text-slate-950'
@@ -663,12 +726,22 @@ export const TimelinePanel: React.FC = () => {
                 onMouseMove={(event) => moveDragTo(event.clientX)}
                 onMouseUp={endDrag}
                 onClick={(event) => {
-                  if (track.kind === 'clip' || track.kind === 'layer') {
+                  if (track.kind === 'clip' || track.kind === 'layer' || track.kind === 'opening' || track.kind === 'ending') {
                     event.stopPropagation();
+                  }
+                  if (track.kind === 'opening') {
+                    openOpeningModal();
+                  }
+                  if (track.kind === 'ending') {
+                    openEndingModal();
                   }
                   if (track.kind === 'clip' && track.clipId) {
                     selectClip(track.clipId);
                     openEditorPanel('clips');
+                  }
+                  if (track.kind === 'layer' && track.layer) {
+                    selectLayer(track.layer.id);
+                    setTimelineModal('layer');
                   }
                 }}
                 onDoubleClick={(event) => {
@@ -679,7 +752,8 @@ export const TimelinePanel: React.FC = () => {
                   }
                   if (track.kind === 'layer' && track.layer) {
                     event.stopPropagation();
-                    editLayerText(track.layer);
+                    selectLayer(track.layer.id);
+                    setTimelineModal('layer');
                   }
                 }}
                 className={`absolute h-[34px] rounded border px-3 py-1.5 text-[11px] font-black ${
@@ -917,156 +991,292 @@ export const TimelinePanel: React.FC = () => {
         </div>
       </div>
 
-      {selectedTransition && (
-        <div className="mt-3 rounded border border-amber-300/35 bg-amber-300/10 p-3">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-[11px] font-black uppercase text-amber-100">
-              <Scissors size={14} />
-              Transition at cut
-            </div>
-            <button
-              onClick={() => {
-                removeTransition(selectedTransition.id);
-                setSelectedTransitionId(null);
-              }}
-              className="inline-flex items-center gap-1 rounded border border-amber-200/35 px-2 py-1 text-[10px] font-bold text-amber-100 hover:bg-amber-200/10"
-            >
-              <Trash2 size={12} />
-              Remove
-            </button>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-[1fr_140px]">
-            <label className="grid gap-1 text-[10px] font-black uppercase text-slate-500">
-              Style
-              <select
-                value={selectedTransition.style}
-                onChange={(event) => updateSelectedTransition({style: event.currentTarget.value as TransitionStyle})}
-                className="rounded border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-bold normal-case text-slate-100 outline-none focus:border-amber-200"
+      {timelineModal && (
+        <div className="fixed inset-0 z-[115] flex items-center justify-center bg-slate-950/78 p-4 backdrop-blur-sm">
+          <div className="max-h-[88vh] w-[min(760px,calc(100vw-32px))] overflow-hidden rounded border border-slate-700 bg-[#070b12] shadow-[0_24px_90px_rgba(0,0,0,0.55)]">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-800 px-4 py-3">
+              <div>
+                <div className="flex items-center gap-2 text-sm font-black uppercase text-slate-100">
+                  {timelineModal === 'transition' ? <Scissors size={16} /> : timelineModal === 'ending' ? <Sparkles size={16} /> : <Film size={16} />}
+                  {timelineModal === 'opening' && 'Starting screen'}
+                  {timelineModal === 'transition' && 'Transition after selected clip'}
+                  {timelineModal === 'ending' && 'Ending screen'}
+                  {timelineModal === 'layer' && (selectedLayer?.type === 'caption' ? 'Caption text' : 'Layer text')}
+                </div>
+                <p className="mt-1 text-xs leading-5 text-slate-500">
+                  {timelineModal === 'opening' && 'Inserted before the source clips and previewed live.'}
+                  {timelineModal === 'transition' && 'Added to the cut after the clip under the scrubber, or the selected clip if the scrubber is outside a clip.'}
+                  {timelineModal === 'ending' && 'Placed after the final selected clip as a Remotion wrap-up screen.'}
+                  {timelineModal === 'layer' && 'Edit the text shown by this timeline layer. Timing stays on its locked channel.'}
+                </p>
+              </div>
+              <button
+                onClick={() => setTimelineModal(null)}
+                className="rounded border border-slate-700 p-2 text-slate-300 hover:bg-slate-800"
+                title="Close"
               >
-                {transitionStyleOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="grid gap-1 text-[10px] font-black uppercase text-slate-500">
-              Duration
-              <input
-                type="number"
-                min={0.05}
-                max={2}
-                step={0.05}
-                value={selectedTransition.duration}
-                onChange={(event) =>
-                  updateSelectedTransition({duration: clamp(Number(event.currentTarget.value), 0.05, 2)})
-                }
-                className="rounded border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-bold normal-case text-slate-100 outline-none focus:border-amber-200"
-              />
-            </label>
-          </div>
-          <p className="mt-2 text-[11px] font-semibold text-slate-500">
-            Preview applies the effect after the outgoing speech boundary, so it does not fade over the last spoken word.
-          </p>
-        </div>
-      )}
+                <X size={16} />
+              </button>
+            </div>
 
-      {activeEndingScreen.enabled && (
-        <div className="mt-3 rounded border border-teal-300/35 bg-teal-300/10 p-3">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-[11px] font-black uppercase text-teal-100">
-              <Sparkles size={14} />
-              Ending screen
-            </div>
-            <button
-              onClick={() => updateEndingScreen({enabled: false})}
-              className="rounded border border-teal-200/35 px-2 py-1 text-[10px] font-bold text-teal-100 hover:bg-teal-200/10"
-            >
-              Disable
-            </button>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-[1fr_120px]">
-            <label className="grid gap-1 text-[10px] font-black uppercase text-slate-500">
-              Template
-              <select
-                value={activeEndingScreen.templateId}
-                onChange={(event) => updateEndingScreen({templateId: event.currentTarget.value as EndingTemplateId})}
-                className="rounded border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-bold normal-case text-slate-100 outline-none focus:border-teal-200"
-              >
-                {endingTemplateOptions.map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="grid gap-1 text-[10px] font-black uppercase text-slate-500">
-              Seconds
-              <input
-                type="number"
-                min={1}
-                max={12}
-                step={0.25}
-                value={activeEndingScreen.duration}
-                onChange={(event) => updateEndingScreen({duration: clamp(Number(event.currentTarget.value), 1, 12)})}
-                className="rounded border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-bold normal-case text-slate-100 outline-none focus:border-teal-200"
-              />
-            </label>
-          </div>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <input
-              value={activeEndingScreen.props.title}
-              onChange={(event) => updateEndingScreen({}, {title: event.currentTarget.value})}
-              className="rounded border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-bold text-slate-100 outline-none focus:border-teal-200"
-              placeholder="Ending title"
-            />
-            <input
-              value={activeEndingScreen.props.subtitle}
-              onChange={(event) => updateEndingScreen({}, {subtitle: event.currentTarget.value})}
-              className="rounded border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-bold text-slate-100 outline-none focus:border-teal-200"
-              placeholder="Ending subtitle"
-            />
-          </div>
-          <textarea
-            value={activeEndingScreen.props.credits}
-            onChange={(event) => updateEndingScreen({}, {credits: event.currentTarget.value})}
-            className="mt-3 min-h-14 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-xs font-semibold text-slate-100 outline-none focus:border-teal-200"
-            placeholder="Credits, attribution, or next steps"
-          />
-        </div>
-      )}
+            <div className="max-h-[calc(88vh-72px)] overflow-auto p-4">
+              {timelineModal === 'opening' && (
+                <div className="grid gap-3">
+                  <div className="grid grid-cols-[1fr_120px] gap-3">
+                    <label className="grid gap-1 text-[10px] font-black uppercase text-slate-500">
+                      Template
+                      <select
+                        value={activeOpeningScreen.templateId}
+                        onChange={(event) =>
+                          updateOpeningScreen({enabled: true, templateId: event.currentTarget.value as OpeningTemplateId})
+                        }
+                        className="rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-bold normal-case text-slate-100 outline-none focus:border-cyan-300"
+                      >
+                        {openingTemplateOptions.map((template) => (
+                          <option key={template.id} value={template.id}>
+                            {template.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="grid gap-1 text-[10px] font-black uppercase text-slate-500">
+                      Seconds
+                      <input
+                        type="number"
+                        min={0.5}
+                        max={12}
+                        step={0.25}
+                        value={activeOpeningScreen.duration}
+                        onChange={(event) =>
+                          updateOpeningScreen({enabled: true, duration: clamp(Number(event.currentTarget.value) || 1, 0.5, 12)})
+                        }
+                        className="rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-bold normal-case text-slate-100 outline-none focus:border-cyan-300"
+                      />
+                    </label>
+                  </div>
+                  <label className="grid gap-1 text-[10px] font-black uppercase text-slate-500">
+                    Title
+                    <input
+                      value={activeOpeningScreen.props.title}
+                      onChange={(event) => updateOpeningScreen({enabled: true}, {title: event.currentTarget.value})}
+                      className="rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-bold normal-case text-slate-100 outline-none focus:border-cyan-300"
+                    />
+                  </label>
+                  <label className="grid gap-1 text-[10px] font-black uppercase text-slate-500">
+                    Subtitle
+                    <input
+                      value={activeOpeningScreen.props.subtitle}
+                      onChange={(event) => updateOpeningScreen({enabled: true}, {subtitle: event.currentTarget.value})}
+                      className="rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-bold normal-case text-slate-100 outline-none focus:border-cyan-300"
+                    />
+                  </label>
+                  <div className="flex justify-between gap-2">
+                    <button
+                      onClick={() => {
+                        updateOpeningScreen({enabled: false});
+                        setTimelineModal(null);
+                      }}
+                      className="rounded border border-slate-700 px-3 py-2 text-xs font-black text-slate-300 hover:bg-slate-800"
+                    >
+                      Disable start
+                    </button>
+                    <button
+                      onClick={() => setTimelineModal(null)}
+                      className="rounded bg-cyan-400 px-4 py-2 text-xs font-black text-slate-950 hover:bg-cyan-300"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </div>
+              )}
 
-      {selectedLayer && (
-        <div className="mt-3 rounded border border-slate-800 bg-slate-950/65 p-3">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <div className="text-[11px] font-black uppercase text-slate-400">
-              {selectedLayer.type === 'caption' ? 'Caption text' : 'Layer text'}
+              {timelineModal === 'transition' && selectedTransition && (
+                <div className="grid gap-3">
+                  <div className="rounded border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-xs leading-5 text-amber-50">
+                    Cut time{' '}
+                    <span className="font-mono font-black">
+                      {selectedTransitionBoundary ? formatTime(selectedTransitionBoundary.boundaryTime) : 'selected cut'}
+                    </span>
+                    . This transition renders between the current clip and the next clip.
+                  </div>
+                  <div className="grid grid-cols-[1fr_120px] gap-3">
+                    <label className="grid gap-1 text-[10px] font-black uppercase text-slate-500">
+                      Style
+                      <select
+                        value={selectedTransition.style}
+                        onChange={(event) => updateSelectedTransition({style: event.currentTarget.value as TransitionStyle})}
+                        className="rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-bold normal-case text-slate-100 outline-none focus:border-cyan-300"
+                      >
+                        {transitionStyleOptions.map((option) => (
+                          <option key={option.id} value={option.id}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="grid gap-1 text-[10px] font-black uppercase text-slate-500">
+                      Seconds
+                      <input
+                        type="number"
+                        min={0.15}
+                        max={2}
+                        step={0.05}
+                        value={selectedTransition.duration}
+                        onChange={(event) =>
+                          updateSelectedTransition({duration: clamp(Number(event.currentTarget.value) || 0.45, 0.15, 2)})
+                        }
+                        className="rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-bold normal-case text-slate-100 outline-none focus:border-cyan-300"
+                      />
+                    </label>
+                  </div>
+                  <div className="flex justify-between gap-2">
+                    <button
+                      onClick={() => {
+                        removeTransition(selectedTransition.id);
+                        setSelectedTransitionId(null);
+                        setTimelineModal(null);
+                      }}
+                      className="rounded border border-rose-300/45 px-3 py-2 text-xs font-black text-rose-100 hover:bg-rose-950"
+                    >
+                      Remove transition
+                    </button>
+                    <button
+                      onClick={() => setTimelineModal(null)}
+                      className="rounded bg-cyan-400 px-4 py-2 text-xs font-black text-slate-950 hover:bg-cyan-300"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {timelineModal === 'ending' && (
+                <div className="grid gap-3">
+                  <div className="grid grid-cols-[1fr_120px] gap-3">
+                    <label className="grid gap-1 text-[10px] font-black uppercase text-slate-500">
+                      Template
+                      <select
+                        value={activeEndingScreen.templateId}
+                        onChange={(event) =>
+                          updateEndingScreen({enabled: true, templateId: event.currentTarget.value as EndingTemplateId})
+                        }
+                        className="rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-bold normal-case text-slate-100 outline-none focus:border-cyan-300"
+                      >
+                        {endingTemplateOptions.map((template) => (
+                          <option key={template.id} value={template.id}>
+                            {template.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="grid gap-1 text-[10px] font-black uppercase text-slate-500">
+                      Seconds
+                      <input
+                        type="number"
+                        min={0.5}
+                        max={12}
+                        step={0.25}
+                        value={activeEndingScreen.duration}
+                        onChange={(event) =>
+                          updateEndingScreen({enabled: true, duration: clamp(Number(event.currentTarget.value) || 1, 0.5, 12)})
+                        }
+                        className="rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-bold normal-case text-slate-100 outline-none focus:border-cyan-300"
+                      />
+                    </label>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <label className="grid gap-1 text-[10px] font-black uppercase text-slate-500">
+                      Title
+                      <input
+                        value={activeEndingScreen.props.title}
+                        onChange={(event) => updateEndingScreen({enabled: true}, {title: event.currentTarget.value})}
+                        className="rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-bold normal-case text-slate-100 outline-none focus:border-cyan-300"
+                      />
+                    </label>
+                    <label className="grid gap-1 text-[10px] font-black uppercase text-slate-500">
+                      Subtitle
+                      <input
+                        value={activeEndingScreen.props.subtitle}
+                        onChange={(event) => updateEndingScreen({enabled: true}, {subtitle: event.currentTarget.value})}
+                        className="rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-bold normal-case text-slate-100 outline-none focus:border-cyan-300"
+                      />
+                    </label>
+                  </div>
+                  <label className="grid gap-1 text-[10px] font-black uppercase text-slate-500">
+                    Credits
+                    <textarea
+                      value={activeEndingScreen.props.credits}
+                      onChange={(event) => updateEndingScreen({enabled: true}, {credits: event.currentTarget.value})}
+                      className="min-h-24 rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-bold normal-case text-slate-100 outline-none focus:border-cyan-300"
+                    />
+                  </label>
+                  <div className="flex justify-between gap-2">
+                    <button
+                      onClick={() => {
+                        updateEndingScreen({enabled: false});
+                        setTimelineModal(null);
+                      }}
+                      className="rounded border border-slate-700 px-3 py-2 text-xs font-black text-slate-300 hover:bg-slate-800"
+                    >
+                      Disable ending
+                    </button>
+                    <button
+                      onClick={() => setTimelineModal(null)}
+                      className="rounded bg-cyan-400 px-4 py-2 text-xs font-black text-slate-950 hover:bg-cyan-300"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {timelineModal === 'layer' && selectedLayer && (
+                <div className="grid gap-3">
+                  <div className="flex items-center justify-between rounded border border-slate-800 bg-slate-950 px-3 py-2 text-[11px] text-slate-500">
+                    <span className="font-black uppercase">{selectedLayer.type}</span>
+                    <span className="font-mono">
+                      {formatTime(selectedLayer.start)} - {formatTime(selectedLayer.end)}
+                    </span>
+                  </div>
+                  <label className="grid gap-1 text-[10px] font-black uppercase text-slate-500">
+                    Text
+                    <textarea
+                      ref={selectedEditorRef}
+                      value={selectedLayer.text}
+                      onChange={(event) => updateLayer(selectedLayer.id, {text: event.currentTarget.value})}
+                      className="min-h-32 rounded border border-cyan-300/60 bg-slate-950 px-3 py-2 text-base font-bold normal-case text-slate-100 outline-none focus:border-cyan-200"
+                    />
+                  </label>
+                  <div className="flex flex-wrap justify-between gap-2">
+                    <button
+                      onClick={() => duplicateLayer(selectedLayer.id)}
+                      className="inline-flex items-center gap-2 rounded border border-slate-700 px-3 py-2 text-xs font-black text-slate-300 hover:bg-slate-800"
+                    >
+                      <Copy size={14} />
+                      Duplicate
+                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          deleteLayer(selectedLayer.id);
+                          setTimelineModal(null);
+                        }}
+                        className="inline-flex items-center gap-2 rounded border border-rose-300/45 px-3 py-2 text-xs font-black text-rose-100 hover:bg-rose-950"
+                      >
+                        <Trash2 size={14} />
+                        Delete
+                      </button>
+                      <button
+                        onClick={() => setTimelineModal(null)}
+                        className="rounded bg-cyan-400 px-4 py-2 text-xs font-black text-slate-950 hover:bg-cyan-300"
+                      >
+                        Done
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-            <div className="font-mono text-[10px] text-slate-600">
-              {formatTime(selectedLayer.start)} - {formatTime(selectedLayer.end)}
-            </div>
-          </div>
-          <textarea
-            ref={selectedEditorRef}
-            value={selectedLayer.text}
-            onChange={(event) => updateLayer(selectedLayer.id, {text: event.currentTarget.value})}
-            className="min-h-16 w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm font-semibold text-slate-100 outline-none focus:border-cyan-300"
-          />
-          <div className="mt-2 flex gap-2">
-          <button
-            onClick={() => duplicateLayer(selectedLayer.id)}
-            className="inline-flex items-center gap-2 rounded border border-slate-700 px-3 py-2 text-xs font-bold text-slate-200 hover:bg-slate-800"
-          >
-            <Copy size={14} />
-            Duplicate selected
-          </button>
-          <button
-            onClick={() => deleteLayer(selectedLayer.id)}
-            className="inline-flex items-center gap-2 rounded border border-rose-500/60 px-3 py-2 text-xs font-bold text-rose-200 hover:bg-rose-500/10"
-          >
-            <Trash2 size={14} />
-            Delete selected
-          </button>
           </div>
         </div>
       )}
