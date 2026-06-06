@@ -95,6 +95,7 @@ type EditorState = {
   removeMusicTrack: (id: string) => void;
   updateClip: (id: string, patch: Partial<Clip>) => void;
   moveClipRipple: (id: string, timelineStart: number) => void;
+  splitClip: (id: string, sourceTime?: number) => void;
   addClip: (clip: Clip) => void;
   reorderClip: (id: string, targetIndex: number) => void;
   deleteClip: (id: string) => void;
@@ -399,6 +400,79 @@ const applyClipMoveRipple = (project: TimelineProject, id: string, requestedStar
   });
 };
 
+const normalizeSplitRawBounds = (clip: Clip): Clip => {
+  const safeStart = Math.min(clip.safeStart, clip.safeEnd - 0.05);
+  const safeEnd = Math.max(clip.safeEnd, safeStart + 0.05);
+  let rawStart = Math.max(safeStart, Math.min(clip.rawStart, safeEnd - 0.05));
+  let rawEnd = Math.min(safeEnd, Math.max(clip.rawEnd, rawStart + 0.05));
+
+  if (rawEnd <= rawStart) {
+    rawStart = safeStart;
+    rawEnd = safeEnd;
+  }
+
+  return {
+    ...clip,
+    safeStart,
+    safeEnd,
+    rawStart,
+    rawEnd,
+    paddedStart: typeof clip.paddedStart === 'number' ? Math.max(safeStart, Math.min(clip.paddedStart, safeEnd)) : clip.paddedStart,
+    paddedEnd: typeof clip.paddedEnd === 'number' ? Math.max(safeStart, Math.min(clip.paddedEnd, safeEnd)) : clip.paddedEnd,
+  };
+};
+
+const splitClipAtSourceTime = (project: TimelineProject, id: string, sourceTime?: number) => {
+  const index = project.clips.findIndex((clip) => clip.id === id);
+  if (index < 0) {
+    return project.clips;
+  }
+
+  const clip = project.clips[index];
+  const splitAt = Math.max(
+    clip.safeStart + 0.25,
+    Math.min(typeof sourceTime === 'number' ? sourceTime : (clip.safeStart + clip.safeEnd) / 2, clip.safeEnd - 0.25),
+  );
+
+  if (clip.safeEnd - clip.safeStart < 0.5 || splitAt <= clip.safeStart || splitAt >= clip.safeEnd) {
+    return project.clips;
+  }
+
+  const windows = clipWindowList(project);
+  const currentWindow = windows[index];
+  const first = normalizeSplitRawBounds({
+    ...clip,
+    safeEnd: splitAt,
+    rawEnd: Math.min(clip.rawEnd, splitAt),
+    paddedEnd: typeof clip.paddedEnd === 'number' ? Math.min(clip.paddedEnd, splitAt) : clip.paddedEnd,
+  });
+  const secondId = `clip_${crypto.randomUUID().slice(0, 8)}`;
+  const second = normalizeSplitRawBounds({
+    ...clip,
+    id: secondId,
+    safeStart: splitAt,
+    rawStart: Math.max(clip.rawStart, splitAt),
+    paddedStart: typeof clip.paddedStart === 'number' ? Math.max(clip.paddedStart, splitAt) : clip.paddedStart,
+    timelineStart: currentWindow ? currentWindow.start + getClipDuration(first) : undefined,
+  });
+
+  const clips = [...project.clips];
+  clips.splice(index, 1, first, second);
+  return clips.map((item, itemIndex) => {
+    const window = windows[itemIndex > index ? itemIndex - 1 : itemIndex];
+    if (!window) {
+      return item;
+    }
+    if (itemIndex <= index) {
+      return itemIndex === index ? {...item, timelineStart: window.start} : item;
+    }
+    if (itemIndex === index + 1) {
+      return {...item, timelineStart: currentWindow ? currentWindow.start + getClipDuration(first) : item.timelineStart};
+    }
+    return item;
+  });
+};
+
 export const useEditorStore = create<EditorState>((set, get) => ({
   project: createEmptyProject(),
   currentTime: 0,
@@ -572,6 +646,21 @@ export const useEditorStore = create<EditorState>((set, get) => ({
           clips,
           layers: syncClipLinkedLayers(project, clips, transcript),
         },
+      };
+    }),
+  splitClip: (id, sourceTime) =>
+    set(({project, transcript}) => {
+      const clips = splitClipAtSourceTime(project, id, sourceTime);
+      const didSplit = clips.length > project.clips.length;
+      const index = clips.findIndex((clip) => clip.id === id);
+      const nextClip = didSplit && index >= 0 ? clips[index + 1] : null;
+      return {
+        project: {
+          ...project,
+          clips,
+          layers: syncClipLinkedLayers(project, clips, transcript),
+        },
+        selectedClipId: nextClip?.id ?? id,
       };
     }),
   addClip: (clip) =>

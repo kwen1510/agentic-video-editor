@@ -230,6 +230,33 @@ const TransitionOverlay: React.FC<{
     );
   }
 
+  if (style === 'ad-stinger') {
+    return (
+      <div className="pointer-events-none absolute inset-0 z-[70] overflow-hidden">
+        <div
+          className="absolute inset-y-0 -left-1/3 w-2/3 bg-cyan-300"
+          style={{
+            opacity: 0.88 * pulse,
+            transform: `translateX(${progress * 178}%) skewX(-16deg)`,
+          }}
+        />
+        <div
+          className="absolute inset-y-0 -right-1/3 w-2/3 bg-amber-300"
+          style={{
+            opacity: 0.84 * pulse,
+            transform: `translateX(${progress * -178}%) skewX(-16deg)`,
+          }}
+        />
+        <div
+          className="absolute inset-0 bg-slate-950"
+          style={{
+            opacity: 0.24 * pulse,
+          }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div
       className="pointer-events-none absolute inset-0 z-[70] bg-slate-950"

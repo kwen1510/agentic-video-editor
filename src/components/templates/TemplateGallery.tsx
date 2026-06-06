@@ -10,6 +10,7 @@ import {templateCatalog, templateCategories, type TemplateCategory, type Templat
 const categoryIcon: Record<TemplateCategory, React.ComponentType<{size?: number; className?: string}>> = {
   interview: Film,
   opener: Clapperboard,
+  cta: Sparkles,
   subtitle: Captions,
   transition: Scissors,
   ending: Sparkles,
@@ -18,6 +19,7 @@ const categoryIcon: Record<TemplateCategory, React.ComponentType<{size?: number;
 const categoryStyle: Record<TemplateCategory, string> = {
   interview: 'border-cyan-400/30 bg-cyan-400/10 text-cyan-100',
   opener: 'border-amber-300/30 bg-amber-300/10 text-amber-100',
+  cta: 'border-fuchsia-300/30 bg-fuchsia-300/10 text-fuchsia-100',
   subtitle: 'border-emerald-300/30 bg-emerald-300/10 text-emerald-100',
   transition: 'border-rose-300/30 bg-rose-300/10 text-rose-100',
   ending: 'border-teal-300/30 bg-teal-300/10 text-teal-100',
@@ -206,6 +208,49 @@ const TransitionPreview: React.FC<{preset: TemplatePreset}> = ({preset}) => {
       {variant === 'film-burn' && <div className="template-film-burn absolute inset-0" />}
       {variant === 'whip-pan' && <div className="template-speed-lines absolute inset-0" />}
       {variant === 'zoom-through' && <div className="template-zoom-ring absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border-4 border-white/80" />}
+      {variant === 'ad-stinger' && (
+        <>
+          <div className="template-ad-swipe-a absolute inset-y-0 -left-1/4 w-2/3 bg-cyan-300" />
+          <div className="template-ad-swipe-b absolute inset-y-0 -right-1/4 w-2/3 bg-amber-300" />
+        </>
+      )}
+    </div>
+  );
+};
+
+const CtaPreview: React.FC<{preset: TemplatePreset}> = ({preset}) => {
+  const accent = previewAccent(preset);
+  const variant = preset.preview?.variant;
+
+  return (
+    <div className="relative h-full overflow-hidden bg-[#111827] p-5">
+      <div className="grid h-full grid-cols-[0.9fr_0.36fr_0.9fr] gap-3">
+        <div className={`relative overflow-hidden rounded ${variant === 'sponsor-kit' ? 'bg-slate-100 text-slate-950' : 'bg-slate-950 text-white'} p-4`}>
+          <div className="text-[9px] font-black uppercase" style={{color: variant === 'sponsor-kit' ? '#0369a1' : accent}}>
+            Opening
+          </div>
+          <div className="mt-5 text-xl font-black leading-none">{preset.preview?.title}</div>
+          <div className="mt-3 text-[11px] font-bold opacity-70">{preset.preview?.subtitle}</div>
+          <div className="absolute bottom-4 left-4 h-1.5 w-24 rounded" style={{background: accent}} />
+        </div>
+        <div className="relative flex items-center justify-center overflow-hidden rounded bg-slate-900">
+          <div className="template-ad-swipe-a absolute inset-y-0 -left-10 w-20 bg-cyan-300" />
+          <div className="template-ad-swipe-b absolute inset-y-0 -right-10 w-20 bg-amber-300" />
+          <Scissors className="relative z-10 text-white" size={22} />
+        </div>
+        <div className={`relative overflow-hidden rounded ${variant === 'soft-kit' ? 'bg-emerald-50 text-slate-950' : 'bg-[#0f172a] text-white'} p-4`}>
+          <div className="text-[9px] font-black uppercase" style={{color: accent}}>
+            Ending
+          </div>
+          <div className="mt-5 text-xl font-black leading-none">
+            {variant === 'sponsor-kit' ? 'Thanks for watching' : variant === 'soft-kit' ? 'Your turn' : 'Ready to try it?'}
+          </div>
+          <div className="mt-3 text-[11px] font-bold opacity-70">{preset.preview?.eyebrow}</div>
+          <div className="absolute bottom-4 left-4 right-4 h-1.5 rounded bg-white/20">
+            <div className="template-progress h-full rounded" style={{background: accent}} />
+          </div>
+        </div>
+      </div>
     </div>
   );
 };
@@ -213,6 +258,10 @@ const TransitionPreview: React.FC<{preset: TemplatePreset}> = ({preset}) => {
 const StaticPreview: React.FC<{preset: TemplatePreset}> = ({preset}) => {
   if (preset.category === 'interview') {
     return <InterviewPreview preset={preset} />;
+  }
+
+  if (preset.category === 'cta') {
+    return <CtaPreview preset={preset} />;
   }
 
   if (preset.category === 'subtitle') {
@@ -425,6 +474,16 @@ export const TemplateGallery: React.FC = () => {
           0%, 40%, 100% { opacity: 0; transform: translateX(0); }
           54% { opacity: 0.7; transform: translateX(-18px); }
         }
+        @keyframes template-ad-swipe-a {
+          0%, 28% { transform: translateX(-82%) skewX(-16deg); opacity: 0; }
+          48% { transform: translateX(45%) skewX(-16deg); opacity: 0.92; }
+          100% { transform: translateX(190%) skewX(-16deg); opacity: 0; }
+        }
+        @keyframes template-ad-swipe-b {
+          0%, 34% { transform: translateX(82%) skewX(-16deg); opacity: 0; }
+          54% { transform: translateX(-45%) skewX(-16deg); opacity: 0.9; }
+          100% { transform: translateX(-190%) skewX(-16deg); opacity: 0; }
+        }
         .template-progress { animation: template-progress 3.6s linear infinite; }
         .template-pulse-track { animation: template-pulse-track 2.6s ease-in-out infinite; }
         .template-active-word { display: inline-block; animation: template-active-word 1.4s ease-in-out infinite; }
@@ -455,6 +514,8 @@ export const TemplateGallery: React.FC = () => {
           background: radial-gradient(circle at 30% 50%, rgba(255,255,255,0.95), rgba(251,146,60,0.82) 22%, rgba(239,68,68,0.32) 42%, transparent 68%);
           mix-blend-mode: screen;
         }
+        .template-ad-swipe-a { animation: template-ad-swipe-a 2.4s ease-in-out infinite; }
+        .template-ad-swipe-b { animation: template-ad-swipe-b 2.4s ease-in-out infinite; }
       `}</style>
     </main>
   );

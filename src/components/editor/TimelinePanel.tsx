@@ -66,6 +66,7 @@ const transitionStyleOptions: Array<{id: TransitionStyle; label: string}> = [
   {id: 'whip-pan', label: 'Whip pan'},
   {id: 'zoom-through', label: 'Zoom through'},
   {id: 'film-burn-flash', label: 'Film burn flash'},
+  {id: 'ad-stinger', label: 'Ad stinger'},
 ];
 
 const endingTemplateOptions: Array<{id: EndingTemplateId; label: string}> = [
@@ -74,6 +75,8 @@ const endingTemplateOptions: Array<{id: EndingTemplateId; label: string}> = [
   {id: 'next-steps', label: 'Next steps'},
   {id: 'social-follow', label: 'Social follow'},
   {id: 'minimal-roll', label: 'Minimal roll'},
+  {id: 'ad-cta-card', label: 'CTA end card'},
+  {id: 'sponsor-end-card', label: 'Sponsor end card'},
 ];
 
 const defaultEndingScreen: EndingScreen = {

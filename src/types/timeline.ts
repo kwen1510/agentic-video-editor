@@ -3,14 +3,18 @@ export type OpeningTemplateId =
   | 'bold-explainer'
   | 'minimal-whiteboard'
   | 'mood-board'
-  | 'dark-cinematic';
+  | 'dark-cinematic'
+  | 'ad-cta-stinger'
+  | 'sponsor-bumper';
 
 export type EndingTemplateId =
   | 'simple-credits'
   | 'thank-you'
   | 'next-steps'
   | 'social-follow'
-  | 'minimal-roll';
+  | 'minimal-roll'
+  | 'ad-cta-card'
+  | 'sponsor-end-card';
 
 export type TransitionStyle =
   | 'soft-fade'
@@ -18,7 +22,8 @@ export type TransitionStyle =
   | 'letterbox-reveal'
   | 'whip-pan'
   | 'zoom-through'
-  | 'film-burn-flash';
+  | 'film-burn-flash'
+  | 'ad-stinger';
 
 export type BoundaryMode = 'raw' | 'padded' | 'silence-snapped';
 

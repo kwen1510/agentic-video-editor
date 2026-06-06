@@ -75,8 +75,9 @@ public/uploads/                 Local user uploads, ignored by git
    - music
    - music volume automation
    - fades/transitions
+   - optional matched CTA/ad opener, transition, and ending card
 
-   Codex should populate this JSON directly where possible. The preview editor is mainly for checking the result, dragging clips left/right, trimming clip handles, editing captions, muting source audio, previewing music, and adjusting music volume.
+   Codex should populate this JSON directly where possible. The preview editor is mainly for checking the result, dragging clips left/right, splitting a kept range into two source ranges, trimming clip handles, editing captions, muting source audio, previewing music, and adjusting music volume.
 
 5. Choose music:
    - Use `src/lib/music/catalog.ts` for music brief presets.
@@ -101,6 +102,7 @@ public/uploads/                 Local user uploads, ignored by git
      - Left rails: mute source audio, hear music, and keep audio separate from visual tracks.
      - Music panel/workspace: preview attributed tracks and adjust the speech bed graph.
      - Template workspace: preview Remotion opener, caption, transition, and ending ideas.
+   - If the user is stuck on style, open the Template workspace and let them browse a few options. Codex can then copy the chosen preset back into timeline JSON.
 
 7. Export only on request:
    - Export timeline JSON.
@@ -134,6 +136,7 @@ When preparing a project for preview:
 
 - Create source entries with stable `src`, `name`, `duration`, `volume`, and `muted`.
 - Create clips with `rawStart`, `rawEnd`, `safeStart`, `safeEnd`, `timelineStart`, and `volume`.
+- To split a clip, do not cut the source media. Create two clip objects that reference the same source file with different `safeStart`/`safeEnd` ranges. Subsequent source timestamps remain hidden in preview.
 - Link captions to clips with `clipId` and segment ids where available.
 - Keep captions on the caption channel; do not move them into source channels.
 - Keep music on the music channel; do not mix music into visual clips in preview JSON.
@@ -143,6 +146,14 @@ When preparing a project for preview:
 ## Template Selection
 
 Use the template catalog in `src/lib/templates/catalog.ts`.
+
+If using an ad/CTA ending, consider a matched starter kit:
+
+- `ad-cta-stinger` opening screen for the first bumper.
+- `ad-stinger` transition around the promotional wrapper.
+- `ad-cta-card` or `sponsor-end-card` for the final wrap-up.
+
+The Template workspace has an **Ads / CTA** category for paired start/transition/end presets. Use it when the user wants an advertisement-like ending, sponsor segment, campaign CTA, or is unsure what style to choose.
 
 Example intent:
 

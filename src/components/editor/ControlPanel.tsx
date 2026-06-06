@@ -653,6 +653,7 @@ const ClipsPanel: React.FC = () => {
   const updateClip = useEditorStore((state) => state.updateClip);
   const deleteClip = useEditorStore((state) => state.deleteClip);
   const reorderClip = useEditorStore((state) => state.reorderClip);
+  const splitClip = useEditorStore((state) => state.splitClip);
   const selectClip = useEditorStore((state) => state.selectClip);
   const [rangeStart, setRangeStart] = useState(0);
   const [rangeEnd, setRangeEnd] = useState(6);
@@ -664,6 +665,12 @@ const ClipsPanel: React.FC = () => {
   const playheadSourceTime = resolvedPlayhead.mode === 'opening' ? 0 : resolvedPlayhead.sourceTime;
   const selectedClip = project.clips.find((clip) => clip.id === selectedClipId) ?? null;
   const selectedClipWindow = selectedClip ? getClipTimelineWindows(project).find(({clip}) => clip.id === selectedClip.id) : null;
+  const splitSourceTime =
+    selectedClip && selectedClipWindow && currentTime >= selectedClipWindow.start && currentTime <= selectedClipWindow.end
+      ? selectedClip.safeStart + (currentTime - selectedClipWindow.start)
+      : selectedClip
+        ? (selectedClip.safeStart + selectedClip.safeEnd) / 2
+        : 0;
 
   const addKeptRange = () => {
     if (!source) {
@@ -742,6 +749,30 @@ const ClipsPanel: React.FC = () => {
               onChange={(event) => updateClip(selectedClip.id, {volume: Number(event.currentTarget.value)})}
               className="w-full"
             />
+          </div>
+          <div className="mt-3 rounded border border-amber-200/25 bg-slate-950/55 p-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div>
+                <div className="text-xs font-black uppercase text-amber-100">Split selected clip</div>
+                <div className="mt-1 font-mono text-[10px] text-slate-500">
+                  split source at {formatTime(splitSourceTime)}
+                  {selectedClipWindow && currentTime >= selectedClipWindow.start && currentTime <= selectedClipWindow.end
+                    ? ' from playhead'
+                    : ' midpoint'}
+                </div>
+              </div>
+              <button
+                disabled={selectedClip.safeEnd - selectedClip.safeStart < 0.5}
+                onClick={() => splitClip(selectedClip.id, splitSourceTime)}
+                className="inline-flex items-center gap-1.5 rounded bg-amber-300 px-3 py-2 text-xs font-black text-slate-950 disabled:opacity-40"
+              >
+                <Scissors size={14} />
+                Split
+              </button>
+            </div>
+            <div className="text-[11px] leading-5 text-slate-500">
+              This creates another kept range from the same source file. Unused timestamps stay hidden; no video file is cut during preview.
+            </div>
           </div>
         </div>
       )}
@@ -837,6 +868,13 @@ const ClipsPanel: React.FC = () => {
                         title="Duplicate clip"
                       >
                         <Copy size={14} />
+                      </button>
+                      <button
+                        onClick={() => splitClip(clip.id, (clip.safeStart + clip.safeEnd) / 2)}
+                        className="rounded bg-slate-800 p-1.5 text-slate-200"
+                        title="Split clip in half"
+                      >
+                        <Scissors size={14} />
                       </button>
                       <button
                         onClick={() => deleteClip(clip.id)}

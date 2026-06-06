@@ -32,6 +32,16 @@ export const openingTemplateOptions: Array<{
     name: 'Dark Cinematic',
     description: 'Subtle zoom and centered title for dramatic intros.',
   },
+  {
+    id: 'ad-cta-stinger',
+    name: 'CTA Stinger',
+    description: 'Fast promotional starting card for offers, announcements, and calls to action.',
+  },
+  {
+    id: 'sponsor-bumper',
+    name: 'Sponsor Bumper',
+    description: 'Short presented-by intro for sponsor or partner mentions.',
+  },
 ];
 
 export const endingTemplateOptions: Array<{
@@ -63,6 +73,16 @@ export const endingTemplateOptions: Array<{
     id: 'minimal-roll',
     name: 'Minimal Roll',
     description: 'Quiet documentary ending with restrained moving credits.',
+  },
+  {
+    id: 'ad-cta-card',
+    name: 'CTA End Card',
+    description: 'Promotional ending card with a strong action line and credits slot.',
+  },
+  {
+    id: 'sponsor-end-card',
+    name: 'Sponsor End Card',
+    description: 'Clean sponsored-by closing card with attribution space.',
   },
 ];
 
@@ -287,6 +307,88 @@ const DarkCinematic: React.FC<OpeningTemplateProps> = ({title, subtitle}) => {
   );
 };
 
+const AdCtaStinger: React.FC<OpeningTemplateProps> = ({title, subtitle}) => {
+  const frame = useCurrentFrame();
+  const punch = interpolate(frame, [0, 12, 28], [0.86, 1.04, 1], {
+    easing: Easing.out(Easing.cubic),
+    extrapolateLeft: 'clamp',
+    extrapolateRight: 'clamp',
+  });
+  const slash = interpolate(frame, [0, 42], [-420, 180], {
+    easing: Easing.out(Easing.cubic),
+    extrapolateLeft: 'clamp',
+    extrapolateRight: 'clamp',
+  });
+  const line = interpolate(frame, [8, 48], [0, 1], {
+    easing: Easing.out(Easing.cubic),
+    extrapolateLeft: 'clamp',
+    extrapolateRight: 'clamp',
+  });
+
+  return (
+    <AbsoluteFill style={{background: '#090b12', overflow: 'hidden'}}>
+      <div
+        style={{
+          position: 'absolute',
+          inset: -120,
+          background: 'linear-gradient(135deg, #06b6d4 0%, #facc15 48%, #fb7185 100%)',
+          transform: `translateX(${slash}px) rotate(-14deg)`,
+          opacity: 0.92,
+        }}
+      />
+      <div style={{position: 'absolute', inset: 54, border: '6px solid rgba(255,255,255,0.82)'}} />
+      <div
+        style={{
+          ...titleBase,
+          color: '#f8fafc',
+          margin: 'auto',
+          width: '84%',
+          transform: `scale(${punch})`,
+          textAlign: 'left',
+        }}
+      >
+        <div style={{fontSize: 38, fontWeight: 950, textTransform: 'uppercase', color: '#0f172a', background: '#facc15', display: 'inline-flex', padding: '12px 18px'}}>
+          Start here
+        </div>
+        <div style={{fontSize: 112, lineHeight: 0.9, fontWeight: 950, maxWidth: 880, marginTop: 32, textShadow: '0 10px 40px rgba(0,0,0,0.45)'}}>
+          {title}
+        </div>
+        <div style={{height: 14, width: 520, marginTop: 34, background: '#67e8f9', transform: `scaleX(${line})`, transformOrigin: 'left'}} />
+        <div style={{fontSize: 40, lineHeight: 1.15, fontWeight: 800, marginTop: 30, color: '#e2e8f0'}}>
+          {subtitle}
+        </div>
+      </div>
+    </AbsoluteFill>
+  );
+};
+
+const SponsorBumper: React.FC<OpeningTemplateProps> = ({title, subtitle}) => {
+  const frame = useCurrentFrame();
+  const opacity = easeIn(frame, 34);
+  const y = interpolate(frame, [0, 42], [28, 0], {
+    easing: Easing.out(Easing.cubic),
+    extrapolateLeft: 'clamp',
+    extrapolateRight: 'clamp',
+  });
+  const sweep = interpolate(frame, [0, 72], [-240, 760], {
+    easing: Easing.inOut(Easing.cubic),
+    extrapolateLeft: 'clamp',
+    extrapolateRight: 'clamp',
+  });
+
+  return (
+    <AbsoluteFill style={{background: 'linear-gradient(160deg, #f8fafc 0%, #e0f2fe 54%, #111827 55%, #111827 100%)', padding: 84, justifyContent: 'center', overflow: 'hidden'}}>
+      <div style={{position: 'absolute', top: 0, bottom: 0, width: 120, background: 'rgba(255,255,255,0.55)', transform: `translateX(${sweep}px) skewX(-18deg)`}} />
+      <div style={{...titleBase, opacity, transform: `translateY(${y}px)`, color: '#0f172a'}}>
+        <div style={{fontSize: 34, fontWeight: 950, textTransform: 'uppercase', color: '#0369a1'}}>Presented by</div>
+        <div style={{fontSize: 104, lineHeight: 0.96, fontWeight: 950, maxWidth: 800, marginTop: 24}}>{title}</div>
+        <div style={{fontSize: 38, lineHeight: 1.2, fontWeight: 760, marginTop: 28, color: '#334155'}}>{subtitle}</div>
+        <div style={{marginTop: 54, width: 360, height: 10, background: '#06b6d4'}} />
+      </div>
+    </AbsoluteFill>
+  );
+};
+
 export const OpeningTemplateComposition: React.FC<OpeningTemplateProps> = (props) => {
   switch (props.templateId) {
     case 'bold-explainer':
@@ -297,6 +399,10 @@ export const OpeningTemplateComposition: React.FC<OpeningTemplateProps> = (props
       return <MoodBoard {...props} />;
     case 'dark-cinematic':
       return <DarkCinematic {...props} />;
+    case 'ad-cta-stinger':
+      return <AdCtaStinger {...props} />;
+    case 'sponsor-bumper':
+      return <SponsorBumper {...props} />;
     case 'calm-academic':
     default:
       return <CalmAcademic {...props} />;
@@ -495,6 +601,56 @@ const MinimalRoll: React.FC<EndingTemplateProps> = ({title, subtitle, credits}) 
   );
 };
 
+const AdCtaCard: React.FC<EndingTemplateProps> = ({title, subtitle, credits}) => {
+  const frame = useCurrentFrame();
+  const scale = interpolate(frame, [0, 24], [0.92, 1], {
+    easing: Easing.out(Easing.cubic),
+    extrapolateLeft: 'clamp',
+    extrapolateRight: 'clamp',
+  });
+  const bar = interpolate(frame, [8, 60], [0.14, 1], {
+    easing: Easing.out(Easing.cubic),
+    extrapolateLeft: 'clamp',
+    extrapolateRight: 'clamp',
+  });
+
+  return (
+    <AbsoluteFill style={{background: '#0f172a', padding: 76, justifyContent: 'center', overflow: 'hidden'}}>
+      <div style={{position: 'absolute', inset: 0, background: 'radial-gradient(circle at 18% 20%, rgba(34,211,238,0.34), transparent 34%), radial-gradient(circle at 92% 80%, rgba(251,113,133,0.36), transparent 38%)'}} />
+      <div style={{...titleBase, position: 'relative', color: '#f8fafc', transform: `scale(${scale})`}}>
+        <div style={{fontSize: 40, fontWeight: 950, textTransform: 'uppercase', color: '#67e8f9'}}>Before you go</div>
+        <div style={{fontSize: 112, lineHeight: 0.88, fontWeight: 950, maxWidth: 840, marginTop: 24}}>{title}</div>
+        <div style={{fontSize: 38, lineHeight: 1.16, fontWeight: 800, marginTop: 32, color: '#cbd5e1'}}>{subtitle}</div>
+        <div style={{height: 16, width: 620, marginTop: 46, background: '#facc15', transform: `scaleX(${bar})`, transformOrigin: 'left'}} />
+        <div style={{fontSize: 28, marginTop: 44, fontWeight: 900, color: '#fda4af'}}>{credits}</div>
+      </div>
+    </AbsoluteFill>
+  );
+};
+
+const SponsorEndCard: React.FC<EndingTemplateProps> = ({title, subtitle, credits}) => {
+  const frame = useCurrentFrame();
+  const opacity = easeIn(frame, 40);
+  const y = interpolate(frame, [0, 44], [24, 0], {
+    easing: Easing.out(Easing.cubic),
+    extrapolateLeft: 'clamp',
+    extrapolateRight: 'clamp',
+  });
+
+  return (
+    <AbsoluteFill style={{background: '#f8fafc', padding: 84, justifyContent: 'center'}}>
+      <div style={{...titleBase, opacity, transform: `translateY(${y}px)`, color: '#111827'}}>
+        <div style={{fontSize: 34, fontWeight: 950, textTransform: 'uppercase', color: '#0e7490'}}>Supported by</div>
+        <div style={{fontSize: 96, lineHeight: 0.96, fontWeight: 950, maxWidth: 820, marginTop: 28}}>{title}</div>
+        <div style={{fontSize: 38, lineHeight: 1.22, fontWeight: 760, marginTop: 28, color: '#475569'}}>{subtitle}</div>
+        <div style={{marginTop: 52, borderTop: '4px solid #111827', paddingTop: 28, fontSize: 26, lineHeight: 1.35, fontWeight: 780, color: '#334155'}}>
+          {credits}
+        </div>
+      </div>
+    </AbsoluteFill>
+  );
+};
+
 export const EndingTemplateComposition: React.FC<EndingTemplateProps> = (props) => {
   switch (props.templateId) {
     case 'simple-credits':
@@ -505,6 +661,10 @@ export const EndingTemplateComposition: React.FC<EndingTemplateProps> = (props) 
       return <SocialFollow {...props} />;
     case 'minimal-roll':
       return <MinimalRoll {...props} />;
+    case 'ad-cta-card':
+      return <AdCtaCard {...props} />;
+    case 'sponsor-end-card':
+      return <SponsorEndCard {...props} />;
     case 'thank-you':
     default:
       return <ThankYou {...props} />;

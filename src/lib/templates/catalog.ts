@@ -1,6 +1,6 @@
 import type {EndingTemplateId, OpeningTemplateId} from '@/types/timeline';
 
-export type TemplateCategory = 'interview' | 'opener' | 'subtitle' | 'transition' | 'ending';
+export type TemplateCategory = 'interview' | 'opener' | 'cta' | 'subtitle' | 'transition' | 'ending';
 
 export type TemplatePreview = {
   variant: string;
@@ -214,6 +214,107 @@ export const templateCatalog: TemplatePreset[] = [
     },
   },
   {
+    id: 'opener-ad-cta-stinger',
+    name: 'CTA Stinger Opener',
+    category: 'opener',
+    description: 'Fast promotional bumper for an offer, announcement, sponsor, or call-to-action start.',
+    tags: ['opener', 'ad', 'cta'],
+    openerTemplateId: 'ad-cta-stinger',
+    preview: {variant: 'remotion', title: 'Join the Challenge', subtitle: 'Watch the 30-second version'},
+    timelineJson: {
+      openingScreen: {
+        templateId: 'ad-cta-stinger',
+        duration: 2.25,
+        props: {title: 'Join the Challenge', subtitle: 'Watch the 30-second version'},
+      },
+    },
+  },
+  {
+    id: 'opener-sponsor-bumper',
+    name: 'Sponsor Bumper Opener',
+    category: 'opener',
+    description: 'Presented-by intro card for partner, sponsor, or campaign videos.',
+    tags: ['opener', 'sponsor', 'ad'],
+    openerTemplateId: 'sponsor-bumper',
+    preview: {variant: 'remotion', title: 'Home Run Week', subtitle: 'Presented by Student Council'},
+    timelineJson: {
+      openingScreen: {
+        templateId: 'sponsor-bumper',
+        duration: 2.5,
+        props: {title: 'Home Run Week', subtitle: 'Presented by Student Council'},
+      },
+    },
+  },
+  {
+    id: 'cta-shortform-action-kit',
+    name: 'Short-Form CTA Kit',
+    category: 'cta',
+    description: 'Matched start bumper, ad-stinger transition, and ending card for social clips with a clear action.',
+    tags: ['ad', 'cta', 'short-form', 'paired'],
+    preview: {variant: 'cta-kit', accent: '#facc15', eyebrow: 'Start + transition + end', title: 'Join the Challenge', subtitle: 'A complete promotional wrapper.'},
+    timelineJson: {
+      openingScreen: {
+        templateId: 'ad-cta-stinger',
+        duration: 2.25,
+        enabled: true,
+        props: {title: 'Join the Challenge', subtitle: 'Watch the 30-second story'},
+      },
+      transitionStyle: 'ad-stinger',
+      endingScreen: {
+        templateId: 'ad-cta-card',
+        duration: 3,
+        enabled: true,
+        props: {title: 'Ready to try it?', subtitle: 'Share your reflection today', credits: '@schoolchannel'},
+      },
+    },
+  },
+  {
+    id: 'cta-sponsored-learning-kit',
+    name: 'Sponsored Learning Kit',
+    category: 'cta',
+    description: 'Presented-by opener and sponsor-safe closing card for school campaigns or partner videos.',
+    tags: ['sponsor', 'education', 'paired'],
+    preview: {variant: 'sponsor-kit', accent: '#67e8f9', eyebrow: 'Presented by', title: 'Home Run Week', subtitle: 'Sponsor-aware without feeling heavy.'},
+    timelineJson: {
+      openingScreen: {
+        templateId: 'sponsor-bumper',
+        duration: 2.5,
+        enabled: true,
+        props: {title: 'Home Run Week', subtitle: 'Presented by Student Council'},
+      },
+      transitionStyle: 'letterbox-reveal',
+      endingScreen: {
+        templateId: 'sponsor-end-card',
+        duration: 3.5,
+        enabled: true,
+        props: {title: 'Thanks for watching', subtitle: 'Supported by Student Council', credits: 'Music and sponsor credits here'},
+      },
+    },
+  },
+  {
+    id: 'cta-soft-reflection-kit',
+    name: 'Soft Reflection CTA Kit',
+    category: 'cta',
+    description: 'Gentler call-to-action wrapper for reflective interviews and education recaps.',
+    tags: ['cta', 'reflection', 'education'],
+    preview: {variant: 'soft-kit', accent: '#34d399', eyebrow: 'Reflect + share', title: 'What stood out?', subtitle: 'A quieter prompt-led wrapper.'},
+    timelineJson: {
+      openingScreen: {
+        templateId: 'calm-academic',
+        duration: 3,
+        enabled: true,
+        props: {title: 'What stood out?', subtitle: 'Listen for one moment you relate to'},
+      },
+      transitionStyle: 'soft-fade',
+      endingScreen: {
+        templateId: 'next-steps',
+        duration: 4,
+        enabled: true,
+        props: {title: 'Your turn', subtitle: 'Write one sentence about your takeaway', credits: 'Reflect, Share, Continue'},
+      },
+    },
+  },
+  {
     id: 'subtitle-classroom-clean',
     name: 'Classroom Clean Captions',
     category: 'subtitle',
@@ -352,6 +453,21 @@ export const templateCatalog: TemplatePreset[] = [
     },
   },
   {
+    id: 'transition-ad-stinger',
+    name: 'Ad Stinger',
+    category: 'transition',
+    description: 'Bright diagonal flash for entering or leaving a promotional bumper or CTA section.',
+    tags: ['transition', 'ad', 'cta'],
+    preview: {variant: 'ad-stinger', accent: '#facc15'},
+    timelineJson: {
+      transitionStyle: 'ad-stinger',
+      duration: 0.38,
+      accentA: '#67e8f9',
+      accentB: '#facc15',
+      appliesTo: ['ad-openers', 'cta-endings', 'clip-boundaries'],
+    },
+  },
+  {
     id: 'ending-thank-you',
     name: 'Warm Thank You',
     category: 'ending',
@@ -436,11 +552,46 @@ export const templateCatalog: TemplatePreset[] = [
       },
     },
   },
+  {
+    id: 'ending-ad-cta-card',
+    name: 'CTA End Card',
+    category: 'ending',
+    description: 'High-energy closing card for sign-ups, follow prompts, challenge invites, and campaign videos.',
+    tags: ['ending', 'ad', 'cta'],
+    endingTemplateId: 'ad-cta-card',
+    preview: {variant: 'remotion-ending', title: 'Ready to try it?', subtitle: 'Share your reflection today'},
+    timelineJson: {
+      endingScreen: {
+        templateId: 'ad-cta-card',
+        duration: 3,
+        enabled: true,
+        props: {title: 'Ready to try it?', subtitle: 'Share your reflection today', credits: '@schoolchannel'},
+      },
+    },
+  },
+  {
+    id: 'ending-sponsor-end-card',
+    name: 'Sponsor End Card',
+    category: 'ending',
+    description: 'Clean sponsored-by closer with room for partner, campaign, and music attribution.',
+    tags: ['ending', 'sponsor', 'credits'],
+    endingTemplateId: 'sponsor-end-card',
+    preview: {variant: 'remotion-ending', title: 'Thanks for watching', subtitle: 'Supported by Student Council'},
+    timelineJson: {
+      endingScreen: {
+        templateId: 'sponsor-end-card',
+        duration: 3.5,
+        enabled: true,
+        props: {title: 'Thanks for watching', subtitle: 'Supported by Student Council', credits: 'Music and sponsor credits here'},
+      },
+    },
+  },
 ];
 
 export const templateCategories: Array<{id: TemplateCategory; label: string}> = [
   {id: 'interview', label: 'Interview'},
   {id: 'opener', label: 'Openers'},
+  {id: 'cta', label: 'Ads / CTA'},
   {id: 'subtitle', label: 'Subtitles'},
   {id: 'transition', label: 'Transitions'},
   {id: 'ending', label: 'Endings'},

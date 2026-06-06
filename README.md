@@ -19,12 +19,14 @@ Use it to:
 - preview source clips
 - add/edit overlays and captions
 - preview Remotion opening screens
+- browse paired Ads/CTA Remotion kits for matched starting bumpers, transitions, and ending cards
 - add music from a local manifest
 - draw speech-aware music volume automation graphs
 - inspect transcript-driven clip choices
 - save/load editable timeline JSON
 - autosave the current edit in browser local storage
 - create a Codex render packet from the exact preview state
+- split a kept clip into two JSON source ranges without cutting the original media file
 
 Final MP4 export is intentionally separate and should only run when requested.
 
