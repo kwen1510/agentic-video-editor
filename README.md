@@ -92,6 +92,16 @@ Current local sample tracks:
 - `"Hot Pursuit" Kevin MacLeod (incompetech.com), licensed under Creative Commons Attribution 4.0. Source: https://incompetech.com/music/royalty-free/index.html?Search=Search&isrc=USUAN1700084 License: https://creativecommons.org/licenses/by/4.0/
 - `"Hep Cats" Kevin MacLeod (incompetech.com), licensed under Creative Commons Attribution 4.0. Source: https://incompetech.com/music/royalty-free/index.html?Search=Search&isrc=USUAN1500022 License: https://creativecommons.org/licenses/by/4.0/
 
+Additional local MoonPurr samples may be present in `public/music/imports/`. MoonPurr states that its tracks are usable in videos, streams, podcasts, games, and apps with attribution under Creative Commons Attribution 4.0. Use this attribution format in descriptions or ending credits:
+
+- Music: `"Jellybeans Dancing"` by MoonPurr, licensed under Creative Commons Attribution 4.0. Source: https://www.moonpurr.com/
+- Music: `"Paper Airplane Parade"` by MoonPurr, licensed under Creative Commons Attribution 4.0. Source: https://www.moonpurr.com/
+- Music: `"Morning Pancakes"` by MoonPurr, licensed under Creative Commons Attribution 4.0. Source: https://www.moonpurr.com/
+- Music: `"Bubble Train"` by MoonPurr, licensed under Creative Commons Attribution 4.0. Source: https://www.moonpurr.com/
+- Music: `"System Override"` by MoonPurr, licensed under Creative Commons Attribution 4.0. Source: https://www.moonpurr.com/
+
+MoonPurr source: https://www.moonpurr.com/ License: https://creativecommons.org/licenses/by/4.0/
+
 ## Transcription
 
 Install Python requirements:
