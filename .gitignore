@@ -1,0 +1,43 @@
+# Dependencies and build output
+node_modules/
+.next/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Local media, uploads, generated renders, and analysis artifacts
+/Videos/
+/public/videos/
+/public/uploads/
+/public/diagnostics/
+/public/audio/
+/public/music/music-manifest.local.json
+/public/music/imports/
+public/music/*.mp3
+public/music/*.wav
+public/music/*.m4a
+/assets/audio/
+/out/
+/analysis/
+/metadata/
+
+# Transcripts and project-local generated state
+/whisper-transcripts/
+/transcripts/
+/codex/
+/projects/*.json
+/projects/*.edl.json
+
+# Runtime noise
+.DS_Store
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*

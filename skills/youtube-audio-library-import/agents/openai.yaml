@@ -1,0 +1,4 @@
+interface:
+  display_name: "YouTube Audio Library Import"
+  short_description: "Import official YouTube music safely"
+  default_prompt: "Use $youtube-audio-library-import to find an official YouTube Audio Library soundtrack for this edit and import it with license metadata."
