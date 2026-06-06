@@ -2,6 +2,28 @@
 
 A Codex-first video editing workflow with a lightweight local preview editor.
 
+## Codex Handoff Pitch
+
+Paste the GitHub repo URL into Codex and ask:
+
+```text
+Install this repository locally and test that the Agentic Video Editor works as intended.
+
+Follow the README exactly:
+1. Clone the repo.
+2. Install Node dependencies.
+3. Install the bundled Codex skills.
+4. Run typecheck, lint, and production build.
+5. Start the Next.js dev server on an available localhost port.
+6. Open and smoke-test the editor, template workspace, and music workspace.
+7. Confirm that the editor previews timeline JSON live and does not render MP4s during editing.
+8. Do not commit or upload any example videos, user media, transcripts, local music imports, project JSON, or rendered output.
+
+After testing, report the local URL, what passed, what failed, and any missing local prerequisites such as FFmpeg, Python, CUDA, or faster-whisper.
+```
+
+This repo is meant to be shared as an installable Codex workflow, not as a bundle of example media. A receiving user should bring their own videos and music, or manually import licensed/attribution-friendly tracks.
+
 The system has four parts:
 
 1. **Codex skill**: editing workflow, transcript reading, clip decisions, diagnostics, and export orchestration.
@@ -42,6 +64,107 @@ Open:
 - Editor: http://127.0.0.1:3001
 - Template workspace: http://127.0.0.1:3001/templates
 - Music workspace: http://127.0.0.1:3001/music
+
+## Codex Install And Verification Checklist
+
+Use this section when a new Codex session is handed only the GitHub URL.
+
+### 1. Clone And Install
+
+```bash
+git clone https://github.com/kwen1510/agentic-video-editor.git
+cd agentic-video-editor
+npm install
+```
+
+### 2. Install Bundled Skills
+
+```bash
+mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
+ln -sfn "$PWD/skills/codex-video-editor" "${CODEX_HOME:-$HOME/.codex}/skills/codex-video-editor"
+ln -sfn "$PWD/skills/youtube-audio-library-import" "${CODEX_HOME:-$HOME/.codex}/skills/youtube-audio-library-import"
+```
+
+Then restart or refresh the Codex session if skills are not detected automatically.
+
+### 3. Verify The App Builds
+
+```bash
+npm run typecheck
+npm run lint
+npm run build
+```
+
+All three commands should pass before any handoff.
+
+### 4. Launch The Local Preview Editor
+
+Use port `3001` unless it is already taken.
+
+```bash
+npm run dev -- --hostname 127.0.0.1 --port 3001
+```
+
+Open:
+
+- `http://127.0.0.1:3001/`
+- `http://127.0.0.1:3001/templates`
+- `http://127.0.0.1:3001/music`
+
+### 5. Smoke-Test Expected Behavior
+
+In the editor:
+
+- The page loads without console errors.
+- The composite timeline is visible.
+- Source video, caption, opening, transition, ending, and music controls are separate channels.
+- Clicking a caption opens a modal, not a new panel under the timeline.
+- Clicking **Start**, **Add transition**, or **Add ending** opens a modal.
+- Clip blocks drag left/right on their own source rows.
+- Caption blocks stay on the caption row.
+- Music stays on the audio channel.
+- Source audio can be muted separately from music.
+- Music can be previewed from the music panel/workspace.
+- **Render with Codex** creates a render handoff prompt instead of automatically rendering an MP4.
+
+In the template workspace:
+
+- Opening, subtitle, transition, interview, and ending/CTA examples are visible.
+- Template examples are previewable as Remotion-style animations or starter looks.
+
+In the music workspace:
+
+- Music direction briefs are visible.
+- The page explains license and attribution requirements.
+- Local music imports are treated as user-provided and remain ignored by git.
+
+### 6. Optional Local Transcription Check
+
+Transcription needs Python dependencies and local hardware support. Install only when the user wants local Whisper transcription:
+
+```bash
+pip install -r scripts/requirements.txt
+python scripts/transcribe.py --help
+```
+
+For real transcription, place a local video in `public/uploads/` and run:
+
+```bash
+python scripts/transcribe.py --input public/uploads/input.mp4 --model small --output transcripts/input.transcript.json
+```
+
+The script should prefer CUDA/GPU when available and fall back to CPU. Missing CUDA is not an app install failure; it just means transcription uses CPU.
+
+### 7. Public Repo Safety Check
+
+Before committing or pushing, run:
+
+```bash
+git status --short
+git ls-files | rg '\.(mp4|mov|m4v|webm|mp3|wav|m4a)$|public/music/imports|public/uploads|public/videos|Videos/' || true
+```
+
+Expected result: no tracked private media files. Do not push user videos, transcripts, local music imports, render packets, or output MP4s.
 
 ## Install The Codex Skill
 
