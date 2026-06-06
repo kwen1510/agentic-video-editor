@@ -31,7 +31,7 @@ import {
   getClipDuration,
   getClipTimelineWindows,
   getSpeechActivityWindows,
-  getTimelineDuration,
+  getVisualTimelineDuration,
   resolveSourceTime,
   sortedVolumePoints,
 } from '@/lib/timeline';
@@ -686,7 +686,7 @@ const ClipsPanel: React.FC = () => {
       rawEnd: end,
       safeStart: start,
       safeEnd: end,
-      timelineStart: getTimelineDuration(project),
+      timelineStart: getVisualTimelineDuration(project),
       boundaryMode: 'raw',
       volume: 1,
       fadeIn: 0.08,
@@ -1505,7 +1505,7 @@ const MusicPanel: React.FC = () => {
             </div>
             <button
               onClick={() => {
-                const duration = Math.max(12, Math.min(60, getTimelineDuration(project)));
+                const duration = Math.max(12, getVisualTimelineDuration(project));
                 const musicTrackBase: MusicTrack = {
                   id: `music_${crypto.randomUUID().slice(0, 8)}`,
                   src: track.src,
@@ -1764,7 +1764,7 @@ const TranscriptPanel: React.FC = () => {
       paddedEnd: version.paddedEnd,
       safeStart: version.safeStart,
       safeEnd: version.safeEnd,
-      timelineStart: getTimelineDuration(project),
+      timelineStart: getVisualTimelineDuration(project),
       boundaryMode: version.boundaryMode,
       volume: version.volume,
       fadeIn: version.fadeIn,

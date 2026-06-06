@@ -1,7 +1,13 @@
 'use client';
 
 import {create} from 'zustand';
-import {getClipDuration, getClipTimelineWindows, getOpeningDuration} from '@/lib/timeline';
+import {
+  getClipDuration,
+  getClipTimelineWindows,
+  getOpeningDuration,
+  getVisualTimelineDuration,
+  sortedVolumePoints,
+} from '@/lib/timeline';
 import type {
   Clip,
   ClipCandidate,
@@ -129,6 +135,15 @@ const makeLayer = (time: number, type: TimelineLayer['type'] = 'text'): Timeline
 
 type ClipWindow = {start: number; end: number};
 
+const compactClipTimeline = (project: TimelineProject, clips: Clip[]) => {
+  let cursor = getOpeningDuration(project);
+  return clips.map((clip) => {
+    const next = {...clip, timelineStart: cursor};
+    cursor += getClipDuration(next);
+    return next;
+  });
+};
+
 const clipWindows = (project: TimelineProject, clips = project.clips) => {
   const windows = new Map<string, ClipWindow>();
   for (const {clip, start, end} of getClipTimelineWindows(project, clips)) {
@@ -136,6 +151,51 @@ const clipWindows = (project: TimelineProject, clips = project.clips) => {
   }
 
   return windows;
+};
+
+const automationWithEndPoint = (track: MusicTrack, end: number) => {
+  const automation = track.volumeAutomation;
+  if (!automation?.enabled) {
+    return automation;
+  }
+
+  const duration = Math.max(0.05, end - track.start);
+  const points = sortedVolumePoints(automation.points).filter((point) => point.time < duration - 0.001);
+  const endVolume = automation.focusVolume ?? points.at(-1)?.volume ?? track.volume;
+
+  return {
+    ...automation,
+    points: [
+      ...points,
+      {
+        id: `vol_${(points.length + 1).toString().padStart(2, '0')}`,
+        time: duration,
+        volume: endVolume,
+      },
+    ],
+  };
+};
+
+const extendMusicToVisualEnd = (project: TimelineProject): TimelineProject => {
+  if (project.music.length === 0) {
+    return project;
+  }
+
+  const visualEnd = getVisualTimelineDuration(project);
+  return {
+    ...project,
+    music: project.music.map((track) => {
+      const end = Math.max(track.end, visualEnd);
+      if (Math.abs(end - track.end) < 0.001) {
+        return track;
+      }
+      return {
+        ...track,
+        end,
+        volumeAutomation: automationWithEndPoint(track, end),
+      };
+    }),
+  };
 };
 
 const layerClipId = (layer: TimelineLayer, clips: Clip[]) => {
@@ -344,25 +404,8 @@ const applyClipPatchWithRipple = (project: TimelineProject, id: string, patch: P
     return project.clips;
   }
 
-  const oldWindows = clipWindowList(project);
   const patchedClips = project.clips.map((clip) => (clip.id === id ? {...clip, ...patch} : clip));
-  const oldDuration = getClipDuration(project.clips[index]);
-  const newDuration = getClipDuration(patchedClips[index]);
-  const durationDelta = newDuration - oldDuration;
-
-  return patchedClips.map((clip, clipIndex) => {
-    const previousWindow = oldWindows[clipIndex];
-    if (!previousWindow) {
-      return clip;
-    }
-    if (clipIndex < index) {
-      return typeof clip.timelineStart === 'number' ? clip : {...clip, timelineStart: previousWindow.start};
-    }
-    if (clipIndex === index) {
-      return {...clip, timelineStart: previousWindow.start};
-    }
-    return {...clip, timelineStart: Math.max(getOpeningDuration(project), previousWindow.start + durationDelta)};
-  });
+  return compactClipTimeline(project, patchedClips);
 };
 
 const applyClipMoveRipple = (project: TimelineProject, id: string, requestedStart: number) => {
@@ -377,27 +420,23 @@ const applyClipMoveRipple = (project: TimelineProject, id: string, requestedStar
     return project.clips;
   }
 
-  const previousEnd = index > 0 ? windows[index - 1]?.end ?? getOpeningDuration(project) : getOpeningDuration(project);
-  const nextStart = Math.max(previousEnd, requestedStart);
-  const delta = nextStart - currentWindow.start;
+  const movingClip = project.clips[index];
+  const remainingClips = project.clips.filter((clip) => clip.id !== id);
+  const remainingWindows = windows.filter(({clip}) => clip.id !== id);
+  let targetIndex = remainingClips.length;
 
-  if (Math.abs(delta) < 0.001) {
-    return project.clips.map((clip, clipIndex) => {
-      const window = windows[clipIndex];
-      return window && typeof clip.timelineStart !== 'number' ? {...clip, timelineStart: window.start} : clip;
-    });
+  for (let windowIndex = 0; windowIndex < remainingWindows.length; windowIndex += 1) {
+    const window = remainingWindows[windowIndex];
+    const midpoint = window.start + (window.end - window.start) / 2;
+    if (requestedStart < midpoint) {
+      targetIndex = windowIndex;
+      break;
+    }
   }
 
-  return project.clips.map((clip, clipIndex) => {
-    const window = windows[clipIndex];
-    if (!window) {
-      return clip;
-    }
-    if (clipIndex < index) {
-      return typeof clip.timelineStart === 'number' ? clip : {...clip, timelineStart: window.start};
-    }
-    return {...clip, timelineStart: Math.max(getOpeningDuration(project), window.start + delta)};
-  });
+  const reordered = [...remainingClips];
+  reordered.splice(targetIndex, 0, movingClip);
+  return compactClipTimeline(project, reordered);
 };
 
 const normalizeSplitRawBounds = (clip: Clip): Clip => {
@@ -458,19 +497,7 @@ const splitClipAtSourceTime = (project: TimelineProject, id: string, sourceTime?
 
   const clips = [...project.clips];
   clips.splice(index, 1, first, second);
-  return clips.map((item, itemIndex) => {
-    const window = windows[itemIndex > index ? itemIndex - 1 : itemIndex];
-    if (!window) {
-      return item;
-    }
-    if (itemIndex <= index) {
-      return itemIndex === index ? {...item, timelineStart: window.start} : item;
-    }
-    if (itemIndex === index + 1) {
-      return {...item, timelineStart: currentWindow ? currentWindow.start + getClipDuration(first) : item.timelineStart};
-    }
-    return item;
-  });
+  return compactClipTimeline(project, clips);
 };
 
 export const useEditorStore = create<EditorState>((set, get) => ({
@@ -483,14 +510,36 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   thoughts: [],
   candidates: [],
   setProject: (project) =>
-    set({
-      project: withProjectDefaults(project),
-      currentTime: 0,
-      isPlaying: false,
-      selectedLayerId: null,
-      selectedClipId: null,
+    set(() => {
+      const nextProject = withProjectDefaults(project);
+      const clips = compactClipTimeline(nextProject, nextProject.clips);
+      return {
+        project: extendMusicToVisualEnd({
+          ...nextProject,
+          clips,
+          layers: syncClipLinkedLayers(nextProject, clips, null),
+        }),
+        currentTime: 0,
+        isPlaying: false,
+        selectedLayerId: null,
+        selectedClipId: null,
+      };
     }),
-  patchProject: (patch) => set(({project}) => ({project: withProjectDefaults({...project, ...patch})})),
+  patchProject: (patch) =>
+    set(({project, transcript}) => {
+      const nextProject = withProjectDefaults({...project, ...patch});
+      if (!patch.clips) {
+        return {project: extendMusicToVisualEnd(nextProject)};
+      }
+      const clips = compactClipTimeline(nextProject, nextProject.clips);
+      return {
+        project: extendMusicToVisualEnd({
+          ...nextProject,
+          clips,
+          layers: syncClipLinkedLayers(nextProject, clips, transcript),
+        }),
+      };
+    }),
   setSourceVideo: (sourceVideo) =>
     set(({project}) => ({
       project: {...project, sourceVideo, sourceVideos: [sourceVideo]},
@@ -528,7 +577,23 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         },
       };
     }),
-  setOpeningScreen: (openingScreen) => set(({project}) => ({project: {...project, openingScreen}})),
+  setOpeningScreen: (openingScreen) =>
+    set(({project}) => {
+      const nextProject = {...project, openingScreen};
+      const clips = compactClipTimeline(nextProject, nextProject.clips);
+      const openingDelta = getOpeningDuration(nextProject) - getOpeningDuration(project);
+      return {
+        project: extendMusicToVisualEnd({
+          ...nextProject,
+          clips,
+          layers: project.layers.map((layer) => ({
+            ...layer,
+            start: Math.max(0, layer.start + openingDelta),
+            end: Math.max(0.05, layer.end + openingDelta),
+          })),
+        }),
+      };
+    }),
   setOpeningTemplate: (templateId) =>
     set(({project}) => ({
       project: {
@@ -539,7 +604,10 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         },
       },
     })),
-  setEndingScreen: (endingScreen) => set(({project}) => ({project: {...project, endingScreen}})),
+  setEndingScreen: (endingScreen) =>
+    set(({project}) => ({
+      project: extendMusicToVisualEnd({...project, endingScreen}),
+    })),
   setEndingTemplate: (templateId) =>
     set(({project}) => ({
       project: {
@@ -630,22 +698,22 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     set(({project, transcript}) => {
       const clips = applyClipPatchWithRipple(project, id, patch);
       return {
-        project: {
+        project: extendMusicToVisualEnd({
           ...project,
           clips,
           layers: syncClipLinkedLayers(project, clips, transcript),
-        },
+        }),
       };
     }),
   moveClipRipple: (id, timelineStart) =>
     set(({project, transcript}) => {
       const clips = applyClipMoveRipple(project, id, timelineStart);
       return {
-        project: {
+        project: extendMusicToVisualEnd({
           ...project,
           clips,
           layers: syncClipLinkedLayers(project, clips, transcript),
-        },
+        }),
       };
     }),
   splitClip: (id, sourceTime) =>
@@ -655,18 +723,25 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       const index = clips.findIndex((clip) => clip.id === id);
       const nextClip = didSplit && index >= 0 ? clips[index + 1] : null;
       return {
-        project: {
+        project: extendMusicToVisualEnd({
           ...project,
           clips,
           layers: syncClipLinkedLayers(project, clips, transcript),
-        },
+        }),
         selectedClipId: nextClip?.id ?? id,
       };
     }),
   addClip: (clip) =>
-    set(({project}) => ({
-      project: {...project, clips: [...project.clips, clip]},
-    })),
+    set(({project, transcript}) => {
+      const clips = compactClipTimeline(project, [...project.clips, clip]);
+      return {
+        project: extendMusicToVisualEnd({
+          ...project,
+          clips,
+          layers: syncClipLinkedLayers(project, clips, transcript),
+        }),
+      };
+    }),
   reorderClip: (id, targetIndex) =>
     set(({project}) => {
       const currentIndex = project.clips.findIndex((clip) => clip.id === id);
@@ -679,13 +754,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       const nextIndex = Math.max(0, Math.min(clips.length, targetIndex));
       clips.splice(nextIndex, 0, clip);
 
-      return {project: {...project, clips, layers: syncClipLinkedLayers(project, clips, get().transcript)}};
+      const compacted = compactClipTimeline(project, clips);
+      return {project: extendMusicToVisualEnd({...project, clips: compacted, layers: syncClipLinkedLayers(project, compacted, get().transcript)})};
     }),
   deleteClip: (id) =>
     set(({project, transcript, selectedClipId}) => {
-      const clips = project.clips.filter((clip) => clip.id !== id);
+      const clips = compactClipTimeline(project, project.clips.filter((clip) => clip.id !== id));
       return {
-        project: {
+        project: extendMusicToVisualEnd({
           ...project,
           clips,
           transitions: (project.transitions ?? []).filter(
@@ -696,7 +772,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
             clips,
             transcript,
           ),
-        },
+        }),
         selectedClipId: selectedClipId === id ? null : selectedClipId,
       };
     }),

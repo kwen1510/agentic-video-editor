@@ -3,7 +3,7 @@
 import React, {useEffect, useMemo, useRef, useState} from 'react';
 import Link from 'next/link';
 import {ArrowLeft, Check, Copy, ExternalLink, Music, Pause, Play, ShieldCheck, SlidersHorizontal} from 'lucide-react';
-import {createSpeechAwareMusicAutomation, getTimelineDuration} from '@/lib/timeline';
+import {createSpeechAwareMusicAutomation, getVisualTimelineDuration} from '@/lib/timeline';
 import {musicBriefGuides, musicSourceCards, sourceName, type MusicBriefGuide} from '@/lib/music/catalog';
 import {useEditorStore} from '@/store/editorStore';
 import type {MusicManifestItem, MusicTrack} from '@/types/timeline';
@@ -205,7 +205,7 @@ export const MusicWorkspace: React.FC = () => {
   };
 
   const timelineTrackFromManifest = (track: MusicManifestItem): MusicTrack => {
-    const timelineDuration = Math.max(30, getTimelineDuration(project));
+    const timelineDuration = Math.max(30, getVisualTimelineDuration(project));
     const baseTrack: MusicTrack = {
       id: `music_${track.id}`,
       src: track.src,

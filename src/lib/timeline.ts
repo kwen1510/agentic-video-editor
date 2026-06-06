@@ -58,11 +58,15 @@ export const getSourceTimelineDuration = (project: TimelineProject) => {
 
 export const getContentEnd = (project: TimelineProject) => getOpeningDuration(project) + getSourceTimelineDuration(project);
 
-export const getTimelineDuration = (project: TimelineProject) => {
+export const getVisualTimelineDuration = (project: TimelineProject) => {
   const mediaEnd = getContentEnd(project) + getEndingDuration(project);
   const layerEnd = Math.max(0, ...project.layers.map((layer) => layer.end));
+  return Math.max(1, mediaEnd, layerEnd);
+};
+
+export const getTimelineDuration = (project: TimelineProject) => {
   const musicEnd = Math.max(0, ...project.music.map((track) => track.end));
-  return Math.max(1, mediaEnd, layerEnd, musicEnd);
+  return Math.max(getVisualTimelineDuration(project), musicEnd);
 };
 
 export const getSourceForSrc = (project: TimelineProject, sourceSrc: string | null | undefined) => {

@@ -135,6 +135,7 @@ export const TimelinePanel: React.FC = () => {
   const removeMusicTrack = useEditorStore((state) => state.removeMusicTrack);
   const updateClip = useEditorStore((state) => state.updateClip);
   const moveClipRipple = useEditorStore((state) => state.moveClipRipple);
+  const splitClip = useEditorStore((state) => state.splitClip);
   const deleteClip = useEditorStore((state) => state.deleteClip);
   const updateAllSourceAudio = useEditorStore((state) => state.updateAllSourceAudio);
   const upsertTransition = useEditorStore((state) => state.upsertTransition);
@@ -291,8 +292,20 @@ export const TimelinePanel: React.FC = () => {
     : project.sourceVideo?.muted ?? false;
   const allMusicMuted = project.music.length > 0 && project.music.every((track) => track.muted);
   const selectedTransition = (project.transitions ?? []).find((transition) => transition.id === selectedTransitionId) ?? null;
+  const clipTimelineWindows = useMemo(() => getClipTimelineWindows(project), [project]);
+  const selectedClipWindow = selectedClipId ? clipTimelineWindows.find(({clip}) => clip.id === selectedClipId) ?? null : null;
+  const activeClipWindow = clipTimelineWindows.find(({start, end}) => currentTime >= start && currentTime <= end) ?? null;
+  const splitTargetWindow = activeClipWindow ?? selectedClipWindow;
+  const splitTargetClip = splitTargetWindow?.clip ?? null;
+  const splitSourceTime =
+    splitTargetClip && splitTargetWindow && currentTime >= splitTargetWindow.start && currentTime <= splitTargetWindow.end
+      ? splitTargetClip.safeStart + (currentTime - splitTargetWindow.start)
+      : splitTargetClip
+        ? (splitTargetClip.safeStart + splitTargetClip.safeEnd) / 2
+        : 0;
+  const canSplitClip = Boolean(splitTargetClip && splitTargetClip.safeEnd - splitTargetClip.safeStart >= 0.5);
   const transitionBoundaries = useMemo<TransitionBoundary[]>(() => {
-    const clipWindows = getClipTimelineWindows(project);
+    const clipWindows = clipTimelineWindows;
     return clipWindows.slice(0, -1).map((window, index) => {
       const nextWindow = clipWindows[index + 1];
       const existing = (project.transitions ?? []).find(
@@ -309,7 +322,7 @@ export const TimelinePanel: React.FC = () => {
         active: Boolean(existing?.enabled),
       };
     });
-  }, [project]);
+  }, [clipTimelineWindows, project.transitions]);
   const selectedTransitionBoundary = transitionBoundaries.find((boundary) => boundary.id === selectedTransitionId) ?? null;
 
   useEffect(() => {
@@ -503,7 +516,7 @@ export const TimelinePanel: React.FC = () => {
   };
 
   const activateTransitionAfterCurrentClip = () => {
-    const windows = getClipTimelineWindows(project);
+    const windows = clipTimelineWindows;
     const selectedIndex = selectedClipId ? windows.findIndex(({clip}) => clip.id === selectedClipId) : -1;
     const scrubberIndex = windows.findIndex(({start, end}) => currentTime >= start && currentTime <= end);
     const targetIndex = scrubberIndex >= 0 ? scrubberIndex : selectedIndex;
@@ -516,6 +529,25 @@ export const TimelinePanel: React.FC = () => {
     }
 
     activateTransition(boundary);
+  };
+
+  const splitClipAtPlayhead = () => {
+    if (!splitTargetClip) {
+      setRenderError('Select a clip, or move the scrubber onto the clip you want to split.');
+      window.setTimeout(() => setRenderError(null), 2200);
+      return;
+    }
+
+    if (!canSplitClip) {
+      setRenderError('That clip is too short to split.');
+      window.setTimeout(() => setRenderError(null), 2200);
+      return;
+    }
+
+    splitClip(splitTargetClip.id, splitSourceTime);
+    if (splitTargetWindow) {
+      setCurrentTime(splitTargetWindow.start + Math.max(0, splitSourceTime - splitTargetClip.safeStart));
+    }
   };
 
   const updateSelectedTransition = (patch: Partial<TimelineTransition>) => {
@@ -614,6 +646,15 @@ export const TimelinePanel: React.FC = () => {
           >
             <Scissors size={13} />
             Add transition
+          </button>
+          <button
+            disabled={!canSplitClip}
+            onClick={splitClipAtPlayhead}
+            className="inline-flex items-center gap-1.5 rounded border border-amber-200/45 bg-amber-300 px-3 py-2 text-[11px] font-black text-slate-950 hover:bg-amber-200 disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-900 disabled:text-slate-600"
+            title="Split the clip under the scrubber"
+          >
+            <Scissors size={13} />
+            Clip
           </button>
           <button
             onClick={openEndingModal}
