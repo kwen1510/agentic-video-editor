@@ -162,11 +162,14 @@ export const TimelinePanel: React.FC = () => {
     sourceEnd?: number;
   } | null>(null);
 
-  const duration = Math.max(1, getTimelineDuration(project));
+  const actualDuration = Math.max(1, getTimelineDuration(project));
+  const hasMusicAtTimelineEnd = project.music.some((track) => Math.abs(track.end - actualDuration) < 0.2);
+  const duration = actualDuration + (hasMusicAtTimelineEnd ? Math.min(8, Math.max(4, actualDuration * 0.15)) : 0);
   const openingDuration = getOpeningDuration(project);
   const contentEnd = getContentEnd(project);
   const activeOpeningScreen = project.openingScreen;
   const activeEndingScreen = project.endingScreen ?? defaultEndingScreen;
+  const clipTimelineWindows = useMemo(() => getClipTimelineWindows(project), [project]);
 
   const {visualRows, visualTracks} = useMemo<{visualRows: VisualRow[]; visualTracks: VisualTrack[]}>(() => {
     const tracks: VisualTrack[] = [];
@@ -193,42 +196,52 @@ export const TimelinePanel: React.FC = () => {
       });
     }
 
-    const sourceRowBySrc = new Map<string, number>();
-    for (const source of sourceVideos) {
-      const row = rows.length;
-      const label = compactLabel(source.name ?? source.src.split('/').at(-1) ?? 'source');
-      sourceRowBySrc.set(source.src, row);
-      rows.push({id: source.src, label, detail: 'source channel'});
-      tracks.push({
-        id: `idle_${source.src}`,
-        label,
-        detail: project.clips.length > 0 ? 'unused ranges dimmed' : 'main video',
-        color: 'bg-slate-700/55',
-        textColor: 'text-slate-400',
-        start: project.clips.length > 0 ? 0 : openingDuration,
-        end: duration,
-        row,
-        kind: 'source-idle',
-      });
-    }
-
-    for (const {clip, start, end} of getClipTimelineWindows(project)) {
-      const row = sourceRowBySrc.get(clip.sourceSrc ?? project.sourceVideo?.src ?? '') ?? rows.length;
-      if (row === rows.length) {
-        rows.push({id: clip.sourceSrc ?? clip.id, label: clip.sourceName ?? 'Source clip', detail: 'source channel'});
+    if (project.clips.length > 0) {
+      for (const {clip, start, end, index} of clipTimelineWindows) {
+        const label = compactLabel(clip.sourceName ?? clip.id);
+        const row = rows.length;
+        rows.push({id: clip.id, label, detail: `take ${index + 1}`});
+        tracks.push({
+          id: `idle_${clip.id}`,
+          label,
+          detail: 'clip channel',
+          color: 'bg-slate-700/55',
+          textColor: 'text-slate-400',
+          start: openingDuration,
+          end: duration,
+          row,
+          kind: 'source-idle',
+        });
+        tracks.push({
+          id: clip.id,
+          label,
+          detail: `${formatTime(start)} out · ${formatTime(clip.safeStart)}-${formatTime(clip.safeEnd)} src`,
+          color: 'bg-amber-300',
+          textColor: 'text-slate-950',
+          start,
+          end,
+          row,
+          kind: 'clip',
+          clipId: clip.id,
+        });
       }
-      tracks.push({
-        id: clip.id,
-        label: compactLabel(clip.sourceName ?? clip.id),
-        detail: `${formatTime(start)} out · ${formatTime(clip.safeStart)}-${formatTime(clip.safeEnd)} src`,
-        color: 'bg-amber-300',
-        textColor: 'text-slate-950',
-        start,
-        end,
-        row,
-        kind: 'clip',
-        clipId: clip.id,
-      });
+    } else {
+      for (const source of sourceVideos) {
+        const row = rows.length;
+        const label = compactLabel(source.name ?? source.src.split('/').at(-1) ?? 'source');
+        rows.push({id: source.src, label, detail: 'source channel'});
+        tracks.push({
+          id: `idle_${source.src}`,
+          label,
+          detail: 'main video',
+          color: 'bg-slate-700/55',
+          textColor: 'text-slate-400',
+          start: openingDuration,
+          end: duration,
+          row,
+          kind: 'source-idle',
+        });
+      }
     }
 
     const captionLayers = project.layers.filter((layer) => layer.type === 'caption');
@@ -278,6 +291,7 @@ export const TimelinePanel: React.FC = () => {
 
     return {visualRows: rows, visualTracks: tracks};
   }, [
+    clipTimelineWindows,
     duration,
     openingDuration,
     project,
@@ -292,7 +306,6 @@ export const TimelinePanel: React.FC = () => {
     : project.sourceVideo?.muted ?? false;
   const allMusicMuted = project.music.length > 0 && project.music.every((track) => track.muted);
   const selectedTransition = (project.transitions ?? []).find((transition) => transition.id === selectedTransitionId) ?? null;
-  const clipTimelineWindows = useMemo(() => getClipTimelineWindows(project), [project]);
   const selectedClipWindow = selectedClipId ? clipTimelineWindows.find(({clip}) => clip.id === selectedClipId) ?? null : null;
   const activeClipWindow = clipTimelineWindows.find(({start, end}) => currentTime >= start && currentTime <= end) ?? null;
   const splitTargetWindow = activeClipWindow ?? selectedClipWindow;
@@ -344,7 +357,7 @@ export const TimelinePanel: React.FC = () => {
     }
     const trackLeft = rect.left + 116;
     const trackWidth = rect.width - 116;
-    return clamp(((clientX - trackLeft) / trackWidth) * duration, 0, duration);
+    return clamp(((clientX - trackLeft) / trackWidth) * duration, 0, actualDuration);
   };
 
   const cleanupDrag = () => {
@@ -392,6 +405,8 @@ export const TimelinePanel: React.FC = () => {
     let start = drag.start;
     let end = drag.end;
 
+    const maxDragEnd = drag.kind === 'music' ? Math.max(duration + 60, drag.end + 60) : duration;
+
     if (drag.mode === 'move') {
       const length = end - start;
       start = clamp(drag.start + delta, 0, Math.max(0, duration - length));
@@ -401,7 +416,7 @@ export const TimelinePanel: React.FC = () => {
       start = clamp(drag.start + delta, 0, drag.end - minDuration);
     }
     if (drag.mode === 'end') {
-      end = clamp(drag.end + delta, drag.start + minDuration, duration);
+      end = clamp(drag.end + delta, drag.start + minDuration, maxDragEnd);
     }
 
     if (drag.kind === 'layer') {
@@ -616,7 +631,7 @@ export const TimelinePanel: React.FC = () => {
         <div>
           <h2 className="text-xs font-black uppercase text-slate-100">Composite Timeline</h2>
           <p className="mt-0.5 text-[11px] text-slate-500">
-            Each source video has its own channel. Chosen 30-second edit ranges are highlighted; unused ranges stay dimmed.
+            Each kept or split clip has its own row. Chosen edit ranges are highlighted; unused source ranges stay dimmed.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -669,7 +684,7 @@ export const TimelinePanel: React.FC = () => {
           </button>
           <div className="flex items-center gap-2 rounded border border-slate-800 bg-slate-950 px-3 py-2 font-mono text-[11px] text-slate-400">
             <Scissors size={14} />
-            <span>{formatTime(currentTime)} / {formatTime(duration)}</span>
+            <span>{formatTime(currentTime)} / {formatTime(actualDuration)}</span>
           </div>
         </div>
       </div>

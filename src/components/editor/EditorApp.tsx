@@ -29,6 +29,10 @@ export const EditorApp: React.FC = () => {
   const setThoughts = useEditorStore((state) => state.setThoughts);
   const didAutoLoad = useRef(false);
   const didHydrateLocalState = useRef(false);
+  const currentProjectJsonRef = useRef('');
+  const lastWorkspaceWriteJsonRef = useRef<string | null>(null);
+  const applyingWorkspaceProjectRef = useRef(false);
+  const lastProjectChangeAtRef = useRef(0);
 
   useEffect(() => {
     if (didHydrateLocalState.current) {
@@ -104,6 +108,10 @@ export const EditorApp: React.FC = () => {
       return;
     }
 
+    const projectJson = JSON.stringify(project);
+    currentProjectJsonRef.current = projectJson;
+    lastProjectChangeAtRef.current = Date.now();
+
     try {
       const saved: SavedEditorState = {
         savedAt: new Date().toISOString(),
@@ -115,7 +123,65 @@ export const EditorApp: React.FC = () => {
     } catch {
       // Local storage is a safety net; JSON file save/export still works if it is unavailable.
     }
+
+    const writeTimer = window.setTimeout(() => {
+      if (applyingWorkspaceProjectRef.current) {
+        return;
+      }
+
+      void fetch(`/api/projects/${project.projectId}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: projectJson,
+      })
+        .then((response) => {
+          if (response.ok) {
+            lastWorkspaceWriteJsonRef.current = projectJson;
+          }
+        })
+        .catch(() => undefined);
+    }, 700);
+
+    return () => window.clearTimeout(writeTimer);
   }, [project, thoughts, transcript]);
+
+  useEffect(() => {
+    if (!project.projectId || !hasRestorableProject(project)) {
+      return;
+    }
+
+    const syncTimer = window.setInterval(() => {
+      if (Date.now() - lastProjectChangeAtRef.current < 1500) {
+        return;
+      }
+
+      void fetch(`/api/projects/${project.projectId}?sync=${Date.now()}`)
+        .then(async (response) => {
+          if (!response.ok) {
+            return;
+          }
+
+          const workspaceProject = (await response.json()) as TimelineProject;
+          const workspaceJson = JSON.stringify(workspaceProject);
+          if (
+            workspaceJson === currentProjectJsonRef.current ||
+            workspaceJson === lastWorkspaceWriteJsonRef.current ||
+            !hasRestorableProject(workspaceProject)
+          ) {
+            return;
+          }
+
+          applyingWorkspaceProjectRef.current = true;
+          setProject(workspaceProject);
+          window.setTimeout(() => {
+            applyingWorkspaceProjectRef.current = false;
+          }, 0);
+        })
+        .catch(() => undefined);
+    }, 3000);
+
+    return () => window.clearInterval(syncTimer);
+  }, [project, project.projectId, setProject]);
 
   return (
     <main className="grid h-screen min-h-0 grid-cols-[minmax(0,1fr)_auto] bg-[#0d1117] text-slate-100">

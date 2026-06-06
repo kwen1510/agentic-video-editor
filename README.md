@@ -47,8 +47,10 @@ Use it to:
 - inspect transcript-driven clip choices
 - save/load editable timeline JSON
 - autosave the current edit in browser local storage
+- autosave the live project JSON to `projects/{projectId}.json` for Codex/user pairing
 - create a Codex render packet from the exact preview state
 - split a kept clip into two JSON source ranges without cutting the original media file
+- extend music on the audio channel while keeping the final fade at the edit end
 
 Final MP4 export is intentionally separate and should only run when requested.
 
@@ -121,8 +123,10 @@ In the editor:
 - Clicking a caption opens a modal, not a new panel under the timeline.
 - Clicking **Start**, **Add transition**, or **Add ending** opens a modal.
 - Clip blocks drag left/right on their own source rows.
+- Split clips appear as separate draggable source rows and are compacted flush with the rest of the edit.
 - Caption blocks stay on the caption row.
 - Music stays on the audio channel.
+- Music blocks can be extended/truncated from the timeline and keep an ending fade.
 - Source audio can be muted separately from music.
 - Music can be previewed from the music panel/workspace.
 - **Render with Codex** creates a render handoff prompt instead of automatically rendering an MP4.
@@ -201,6 +205,23 @@ The editor has a **Render with Codex** button in the composite timeline. It does
 Copy the generated prompt into Codex. Codex should use the saved project/EDL as the source of truth, verify local files exist, then render the final MP4 explicitly. The `projects/` folder is ignored by git so private timelines and media paths do not enter the public repository.
 
 The browser editor also autosaves the current project, transcript, and grouped thoughts to local storage. This is a safety net for interactive tweaking; file export/render packets are still the durable handoff format.
+
+## Live Codex Workspace Sync
+
+While the editor is open, it also writes the active timeline to:
+
+```text
+projects/{projectId}.json
+```
+
+That file is ignored by git. Codex can safely edit it during a paired session, and the browser will poll for changes and refresh the preview state. This is the intended lightweight workflow:
+
+1. Codex creates or updates `projects/{projectId}.json`.
+2. The user previews the edit and makes only small timing, caption, volume, music, split, and mute changes.
+3. The editor autosaves those changes back to the same workspace JSON.
+4. Codex reads the updated JSON or the **Render with Codex** packet when the user is ready to export.
+
+Avoid exposing extra knobs to basic users. Major creative changes should be made by Codex through timeline JSON, then previewed in the app.
 
 ## YouTube Audio Library
 

@@ -176,6 +176,22 @@ const automationWithEndPoint = (track: MusicTrack, end: number) => {
   };
 };
 
+const normalizeMusicTrack = (track: MusicTrack): MusicTrack => {
+  const duration = Math.max(0.05, track.end - track.start);
+  const fadeOut = Math.max(0.75, Math.min(track.fadeOut || 2, Math.max(0.75, duration / 2)));
+  const fadeIn = Math.max(0, Math.min(track.fadeIn || 0, Math.max(0, duration - fadeOut)));
+  const normalized = {
+    ...track,
+    fadeIn,
+    fadeOut,
+  };
+
+  return {
+    ...normalized,
+    volumeAutomation: automationWithEndPoint(normalized, normalized.end),
+  };
+};
+
 const extendMusicToVisualEnd = (project: TimelineProject): TimelineProject => {
   if (project.music.length === 0) {
     return project;
@@ -187,13 +203,12 @@ const extendMusicToVisualEnd = (project: TimelineProject): TimelineProject => {
     music: project.music.map((track) => {
       const end = Math.max(track.end, visualEnd);
       if (Math.abs(end - track.end) < 0.001) {
-        return track;
+        return normalizeMusicTrack(track);
       }
-      return {
+      return normalizeMusicTrack({
         ...track,
         end,
-        volumeAutomation: automationWithEndPoint(track, end),
-      };
+      });
     }),
   };
 };
@@ -681,13 +696,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   selectClip: (selectedClipId) => set({selectedClipId}),
   addMusicTrack: (track) =>
     set(({project}) => ({
-      project: {...project, music: [...project.music, track]},
+      project: {...project, music: [...project.music, normalizeMusicTrack(track)]},
     })),
   updateMusicTrack: (id, patch) =>
     set(({project}) => ({
       project: {
         ...project,
-        music: project.music.map((track) => (track.id === id ? {...track, ...patch} : track)),
+        music: project.music.map((track) => (track.id === id ? normalizeMusicTrack({...track, ...patch}) : track)),
       },
     })),
   removeMusicTrack: (id) =>

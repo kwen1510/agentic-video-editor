@@ -30,8 +30,7 @@ const LayerOverlay: React.FC<{
   currentTime: number;
   onSelect: () => void;
   onMove: (patch: Pick<TimelineLayer, 'x' | 'y'>) => void;
-  onTextChange: (text: string) => void;
-}> = ({layer, selected, currentTime, onSelect, onMove, onTextChange}) => {
+}> = ({layer, selected, currentTime, onSelect, onMove}) => {
   const drag = useRef<{startX: number; startY: number; layerX: number; layerY: number} | null>(null);
   const isCaption = layer.type === 'caption';
   const renderY = isCaption ? Math.max(140, Math.min(designHeight - 96, layer.y)) : layer.y;
@@ -64,10 +63,7 @@ const LayerOverlay: React.FC<{
       onDoubleClick={(event) => {
         event.preventDefault();
         event.stopPropagation();
-        const nextText = window.prompt(layer.type === 'caption' ? 'Edit caption text' : 'Edit layer text', layer.text);
-        if (nextText !== null) {
-          onTextChange(nextText);
-        }
+        onSelect();
       }}
       onPointerMove={(event) => {
         if (!drag.current) {
@@ -151,8 +147,11 @@ const MusicTrackAudio: React.FC<{track: MusicTrack; ducking: boolean}> = ({track
     }
 
     const expected = currentTime - track.start;
-    if (Math.abs(audio.currentTime - expected) > 0.25) {
-      audio.currentTime = Math.max(0, expected);
+    const audioDuration = Number.isFinite(audio.duration) && audio.duration > 0.05 ? audio.duration : 0;
+    const expectedLoopTime = audioDuration > 0 ? expected % audioDuration : expected;
+    audio.loop = track.end - track.start > audioDuration && audioDuration > 0;
+    if (Math.abs(audio.currentTime - expectedLoopTime) > 0.25) {
+      audio.currentTime = Math.max(0, expectedLoopTime);
     }
     void audio.play().catch(() => undefined);
   }, [currentTime, isPlaying, track.end, track.start, volume]);
@@ -486,7 +485,6 @@ export const PreviewPane: React.FC = () => {
               currentTime={currentTime}
               onSelect={() => selectLayer(layer.id)}
               onMove={(patch) => updateLayer(layer.id, patch)}
-              onTextChange={(text) => updateLayer(layer.id, {text})}
             />
           ))}
 

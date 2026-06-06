@@ -96,6 +96,7 @@ public/uploads/                 Local user uploads, ignored by git
    - Use the preview/editor for small manual changes.
    - Do not render MP4 while iterating.
    - The app autosaves the current edit to browser local storage as a safety net.
+   - The app also writes the active project to `projects/{projectId}.json` and polls that file for Codex-side edits.
    - Explain the main surfaces if the user is new:
      - Preview area: live video, captions, overlays, opener, ending.
      - Composite timeline: source rows, fixed caption row, separate music channel, transitions, ending block.
@@ -117,7 +118,7 @@ Use the editor when the user needs to inspect or lightly correct the result. Avo
 Recommended pattern:
 
 1. Codex creates or updates the timeline JSON.
-2. Launch the editor and load the project.
+2. Launch the editor and load the project. Prefer `projects/{projectId}.json` for live paired edits because the browser reads and writes that ignored workspace file.
 3. Ask the user to check only the necessary controls:
    - move clip blocks left/right
    - trim clip starts/ends
@@ -140,8 +141,9 @@ When preparing a project for preview:
 - Link captions to clips with `clipId` and segment ids where available.
 - Keep captions on the caption channel; do not move them into source channels.
 - Keep music on the music channel; do not mix music into visual clips in preview JSON.
+- Let music tracks cover the full visual edit by default. If the user extends music in the timeline, preserve or regenerate a fade-out at the final music end.
 - Store required music attribution on the music track so final export can create ending credits or description text.
-- Use local project JSON or app APIs for persistence; never commit private project JSON.
+- Use `projects/{projectId}.json` or app APIs for persistence; never commit private project JSON.
 
 ## Template Selection
 
