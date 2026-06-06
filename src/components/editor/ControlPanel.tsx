@@ -1019,6 +1019,7 @@ const MusicPanel: React.FC = () => {
   const [musicSearch, setMusicSearch] = useState('upbeat lo-fi attribution');
   const [importing, setImporting] = useState(false);
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [importFile, setImportFile] = useState<File | null>(null);
   const [importForm, setImportForm] = useState({
     name: '',
     artist: '',
@@ -1093,14 +1094,35 @@ const MusicPanel: React.FC = () => {
     setImporting(true);
     setImportStatus(null);
     try {
+      const importBody = {
+        ...importForm,
+        bpm: Number(importForm.bpm) || 0,
+        tags: [importForm.style, importForm.vocal, importForm.energy].filter(Boolean),
+      };
+      const request =
+        importFile instanceof File
+          ? (() => {
+              const formData = new FormData();
+              formData.append('file', importFile);
+              Object.entries(importBody).forEach(([key, value]) => {
+                if (Array.isArray(value)) {
+                  formData.append(key, value.join(','));
+                  return;
+                }
+                formData.append(key, String(value ?? ''));
+              });
+              return {
+                method: 'POST',
+                body: formData,
+              };
+            })()
+          : {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify(importBody),
+            };
       const response = await fetch('/api/music/import', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({
-          ...importForm,
-          bpm: Number(importForm.bpm) || 0,
-          tags: [importForm.style, importForm.vocal, importForm.energy].filter(Boolean),
-        }),
+        ...request,
       });
       const data = (await response.json()) as {track?: MusicManifestItem; manifest?: MusicManifestItem[]; error?: string};
       if (!response.ok || !data.track) {
@@ -1117,6 +1139,7 @@ const MusicPanel: React.FC = () => {
         attribution: '',
         licenseConfirmed: false,
       }));
+      setImportFile(null);
       await loadManifest();
     } catch (error) {
       setImportStatus(error instanceof Error ? error.message : 'Could not import this track');
@@ -1264,7 +1287,7 @@ const MusicPanel: React.FC = () => {
           ))}
         </div>
         <div className="mt-3 rounded bg-slate-900 px-3 py-2 text-[11px] leading-5 text-slate-400">
-          Search for: <span className="font-semibold text-slate-200">{musicSearch || 'creator music'}</span>. Download only tracks whose page clearly allows your use. Then paste the direct audio download URL below.
+          Search for: <span className="font-semibold text-slate-200">{musicSearch || 'creator music'}</span>. For YouTube Audio Library, download the MP3 from YouTube Studio and import it as a local file. For other sources, use either a local file or a direct audio URL from the source page.
         </div>
       </details>
 
@@ -1288,13 +1311,24 @@ const MusicPanel: React.FC = () => {
             />
           </div>
           <div className="col-span-2">
-            <FieldLabel>Direct audio download URL</FieldLabel>
+            <FieldLabel>Downloaded audio file</FieldLabel>
+            <input
+              type="file"
+              accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac"
+              onChange={(event) => setImportFile(event.currentTarget.files?.[0] ?? null)}
+              className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100 file:mr-3 file:rounded file:border-0 file:bg-cyan-400 file:px-3 file:py-1 file:text-xs file:font-black file:text-slate-950"
+            />
+            {importFile && <div className="mt-1 text-[11px] font-semibold text-cyan-200">{importFile.name}</div>}
+          </div>
+          <div className="col-span-2">
+            <FieldLabel>Direct audio download URL (optional if file selected)</FieldLabel>
             <input
               value={importForm.downloadUrl}
               onChange={(event) => patchImportForm({downloadUrl: event.currentTarget.value})}
               placeholder="https://.../track.mp3"
               className="w-full rounded border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-100"
             />
+            <div className="mt-1 text-[10px] leading-4 text-slate-500">Do not paste ordinary YouTube video URLs. Use the official YouTube Studio download, then select the local MP3 above.</div>
           </div>
           <div className="col-span-2">
             <FieldLabel>Source / track page URL</FieldLabel>
@@ -1398,7 +1432,7 @@ const MusicPanel: React.FC = () => {
           onClick={importTrack}
           className="mt-3 w-full rounded bg-cyan-400 px-3 py-2 text-xs font-black text-slate-950 disabled:opacity-45"
         >
-          {importing ? 'Importing...' : 'Download into local music library'}
+          {importing ? 'Importing...' : importFile ? 'Import local audio file' : 'Download into local music library'}
         </button>
         {importStatus && <div className="mt-2 rounded border border-slate-800 bg-slate-900 px-3 py-2 text-xs text-slate-300">{importStatus}</div>}
       </details>

@@ -23,6 +23,8 @@ Use it to:
 - draw speech-aware music volume automation graphs
 - inspect transcript-driven clip choices
 - save/load editable timeline JSON
+- autosave the current edit in browser local storage
+- create a Codex render packet from the exact preview state
 
 Final MP4 export is intentionally separate and should only run when requested.
 
@@ -63,6 +65,18 @@ For private/local music testing, create `public/music/music-manifest.local.json`
 It is ignored by git and takes precedence over the tracked public manifest.
 Use `public/music/music-manifest.json` only for assets you intentionally want in the public package.
 
+## Codex Render Handoff
+
+The editor has a **Render with Codex** button in the composite timeline. It does not silently render an MP4. It writes a local render packet under `projects/`:
+
+- `*.render-project.json`
+- `*.render-edl.json`
+- `*.render-prompt.md`
+
+Copy the generated prompt into Codex. Codex should use the saved project/EDL as the source of truth, verify local files exist, then render the final MP4 explicitly. The `projects/` folder is ignored by git so private timelines and media paths do not enter the public repository.
+
+The browser editor also autosaves the current project, transcript, and grouped thoughts to local storage. This is a safety net for interactive tweaking; file export/render packets are still the durable handoff format.
+
 ## YouTube Audio Library
 
 Use the official YouTube Audio Library at `https://www.youtube.com/audiolibrary` for YouTube-safe music discovery. YouTube's help page says tracks can be previewed in the Audio Library and downloaded as MP3s from YouTube Studio; Creative Commons tracks require attribution, while standard Audio Library tracks can be filtered by attribution-not-required.
@@ -72,27 +86,16 @@ For this public tool, treat YouTube Audio Library tracks as local/manual imports
 - preview/search in YouTube Studio
 - download from the official Audio Library UI
 - copy attribution text when required
-- import the downloaded MP3 into the ignored local music library
+- import the downloaded MP3 into the ignored local music library with the Music panel file picker
 - keep the metadata in `public/music/music-manifest.local.json` and timeline JSON
 
 Source: https://support.google.com/youtube/answer/3376882
 
-## Sample Music Attribution
+## Playable Local Examples
 
-The local demo music manifest may include downloaded MP3 samples from Incompetech. These are real web-downloaded tracks, not generated placeholder tones. They require attribution when used in a published/exported video.
+The public repository does not bundle MP3s. Local demo manifests may include downloaded MP3 samples for previewing what a music direction feels like. These are real web-downloaded tracks, not generated placeholder tones, and they must be attributed when used in a published/exported video.
 
-Use the original track page as the source of truth before shipping a video. Keep the attribution text in timeline JSON and include it in the video description or ending credits.
-
-Current local sample tracks:
-
-- `"Carefree" Kevin MacLeod (incompetech.com), licensed under Creative Commons Attribution 4.0. Source: https://incompetech.com/music/royalty-free/index.html?Search=Search&isrc=USUAN1400037 License: https://creativecommons.org/licenses/by/4.0/
-- `"Clear Air" Kevin MacLeod (incompetech.com), licensed under Creative Commons Attribution 4.0. Source: https://incompetech.com/music/royalty-free/index.html?Search=Search&isrc=USUAN1100626 License: https://creativecommons.org/licenses/by/4.0/
-- `"Werq" Kevin MacLeod (incompetech.com), licensed under Creative Commons Attribution 4.0. Source: https://incompetech.com/music/royalty-free/index.html?Search=Search&isrc=USUAN1800005 License: https://creativecommons.org/licenses/by/4.0/
-- `"Reunited" Kevin MacLeod (incompetech.com), licensed under Creative Commons Attribution 4.0. Source: https://incompetech.com/music/royalty-free/index.html?Search=Search&isrc=USUAN1200068 License: https://creativecommons.org/licenses/by/4.0/
-- `"Hot Pursuit" Kevin MacLeod (incompetech.com), licensed under Creative Commons Attribution 4.0. Source: https://incompetech.com/music/royalty-free/index.html?Search=Search&isrc=USUAN1700084 License: https://creativecommons.org/licenses/by/4.0/
-- `"Hep Cats" Kevin MacLeod (incompetech.com), licensed under Creative Commons Attribution 4.0. Source: https://incompetech.com/music/royalty-free/index.html?Search=Search&isrc=USUAN1500022 License: https://creativecommons.org/licenses/by/4.0/
-
-Additional local MoonPurr samples may be present in `public/music/imports/`. MoonPurr states that its tracks are usable in videos, streams, podcasts, games, and apps with attribution under Creative Commons Attribution 4.0. Use this attribution format in descriptions or ending credits:
+MoonPurr samples may be present in `public/music/imports/`. MoonPurr states that its tracks are usable in videos, streams, podcasts, games, and apps with attribution under Creative Commons Attribution 4.0. Use this attribution format in descriptions or ending credits:
 
 - Music: `"Jellybeans Dancing"` by MoonPurr, licensed under Creative Commons Attribution 4.0. Source: https://www.moonpurr.com/
 - Music: `"Paper Airplane Parade"` by MoonPurr, licensed under Creative Commons Attribution 4.0. Source: https://www.moonpurr.com/

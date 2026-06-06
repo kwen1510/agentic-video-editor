@@ -33,6 +33,7 @@ public/music/*.m4a
 /codex/
 /projects/*.json
 /projects/*.edl.json
+/projects/*.render-prompt.md
 
 # Runtime noise
 .DS_Store

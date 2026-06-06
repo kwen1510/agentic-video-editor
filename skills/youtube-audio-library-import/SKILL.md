@@ -73,8 +73,8 @@ If the user explicitly asks Codex to click the official Download button in YouTu
    - Ask the user for the downloaded file path, or inspect recent MP3 files in `~/Downloads` and ask for confirmation before using one.
 
 6. Import into the local editor:
-   - Copy the MP3 to `public/music/imports/` or another ignored local music folder.
-   - Add or update `public/music/music-manifest.local.json`.
+   - Prefer the editor Music panel file picker: select the downloaded MP3, fill in license/source/attribution metadata, and import it into the ignored local music library.
+   - If importing manually, copy the MP3 to `public/music/imports/` and add or update `public/music/music-manifest.local.json`.
    - Keep the local manifest and MP3 ignored by git.
    - Use a stable id such as `youtube-audio-library-track-title-artist`.
 
@@ -110,7 +110,7 @@ After import:
 
 - Add the track to the timeline from the Music panel.
 - Use speech-aware automation rather than one flat volume when there are no-speech sections.
-- Start with no-speech music around `0.8-1.0`, speech bed around `0.16-0.24`, and ramp around `0.25-0.5` seconds.
+- Start with no-speech music around `0.75-0.9`, speech bed around `0.16-0.24`, and ramp around `0.25-0.5` seconds.
 - Store attribution in timeline JSON so export can place it in ending credits or the video description.
 
 ## Repository Safety

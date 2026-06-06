@@ -1,7 +1,7 @@
 'use client';
 
 import React, {useEffect, useMemo, useRef, useState} from 'react';
-import {Copy, Film, Music2, Plus, Scissors, Sparkles, Trash2} from 'lucide-react';
+import {Copy, Film, Loader2, Music2, Plus, Scissors, Sparkles, Trash2, Wand2, X} from 'lucide-react';
 import {formatTime, getClipTimelineWindows, getContentEnd, getOpeningDuration, getTimelineDuration, sortedVolumePoints} from '@/lib/timeline';
 import {useEditorStore} from '@/store/editorStore';
 import type {EndingScreen, EndingTemplateId, MusicTrack, TimelineLayer, TimelineTransition, TransitionStyle} from '@/types/timeline';
@@ -94,6 +94,16 @@ type TransitionBoundary = TimelineTransition & {
   active: boolean;
 };
 
+type RenderBriefResponse = {
+  prompt?: string;
+  paths?: {
+    project: string;
+    edl: string;
+    prompt: string;
+  };
+  error?: string;
+};
+
 export const TimelinePanel: React.FC = () => {
   const project = useEditorStore((state) => state.project);
   const currentTime = useEditorStore((state) => state.currentTime);
@@ -116,6 +126,11 @@ export const TimelinePanel: React.FC = () => {
   const removeTransition = useEditorStore((state) => state.removeTransition);
   const setEndingScreen = useEditorStore((state) => state.setEndingScreen);
   const [selectedTransitionId, setSelectedTransitionId] = useState<string | null>(null);
+  const [renderBusy, setRenderBusy] = useState(false);
+  const [renderPrompt, setRenderPrompt] = useState('');
+  const [renderPaths, setRenderPaths] = useState<RenderBriefResponse['paths'] | null>(null);
+  const [renderError, setRenderError] = useState<string | null>(null);
+  const [renderCopied, setRenderCopied] = useState(false);
   const timelineRef = useRef<HTMLDivElement | null>(null);
   const cleanupDragRef = useRef<(() => void) | null>(null);
   const dragRef = useRef<{
@@ -424,6 +439,43 @@ export const TimelinePanel: React.FC = () => {
     window.dispatchEvent(new CustomEvent('agentic-video-editor:open-panel', {detail: {tab}}));
   };
 
+  const createRenderBrief = async () => {
+    setRenderBusy(true);
+    setRenderError(null);
+    setRenderCopied(false);
+    try {
+      const response = await fetch('/api/codex/render-brief', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({project}),
+      });
+      const data = (await response.json()) as RenderBriefResponse;
+      if (!response.ok || !data.prompt) {
+        throw new Error(data.error ?? 'Could not create render brief');
+      }
+      setRenderPrompt(data.prompt);
+      setRenderPaths(data.paths ?? null);
+    } catch (error) {
+      setRenderError(error instanceof Error ? error.message : 'Could not create render brief');
+    } finally {
+      setRenderBusy(false);
+    }
+  };
+
+  const copyRenderPrompt = () => {
+    if (!renderPrompt) {
+      return;
+    }
+    const copyPromise = navigator.clipboard?.writeText(renderPrompt);
+    if (!copyPromise) {
+      return;
+    }
+    void copyPromise.then(() => {
+      setRenderCopied(true);
+      window.setTimeout(() => setRenderCopied(false), 1400);
+    });
+  };
+
   const activateTransition = (boundary: TransitionBoundary) => {
     const transition: TimelineTransition = {
       id: boundary.id,
@@ -489,6 +541,14 @@ export const TimelinePanel: React.FC = () => {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            disabled={!project.sourceVideo || renderBusy}
+            onClick={createRenderBrief}
+            className="inline-flex items-center gap-1.5 rounded border border-cyan-300/45 bg-cyan-400 px-3 py-2 text-[11px] font-black text-slate-950 hover:bg-cyan-300 disabled:cursor-not-allowed disabled:border-slate-700 disabled:bg-slate-900 disabled:text-slate-600"
+          >
+            {renderBusy ? <Loader2 size={13} className="animate-spin" /> : <Wand2 size={13} />}
+            Render with Codex
+          </button>
           <button
             onClick={enableEndingScreen}
             className={`inline-flex items-center gap-1.5 rounded border px-3 py-2 text-[11px] font-black ${
@@ -1005,6 +1065,72 @@ export const TimelinePanel: React.FC = () => {
             Delete selected
           </button>
           </div>
+        </div>
+      )}
+
+      {renderPrompt && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/78 p-4 backdrop-blur-sm">
+          <div className="max-h-[88vh] w-[min(920px,calc(100vw-32px))] overflow-hidden rounded border border-cyan-300/35 bg-[#070b12] shadow-[0_24px_90px_rgba(0,0,0,0.55)]">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-800 px-4 py-3">
+              <div>
+                <div className="flex items-center gap-2 text-sm font-black uppercase text-cyan-100">
+                  <Wand2 size={16} />
+                  Render with Codex
+                </div>
+                <p className="mt-1 text-xs leading-5 text-slate-400">
+                  The app saved the exact preview state as local project and EDL files. Copy this prompt into Codex to render the final MP4 from those values.
+                </p>
+              </div>
+              <button
+                onClick={() => setRenderPrompt('')}
+                className="rounded border border-slate-700 p-2 text-slate-300 hover:bg-slate-800"
+                title="Close render brief"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="grid max-h-[calc(88vh-72px)] gap-3 overflow-auto p-4">
+              {renderPaths && (
+                <div className="grid gap-2 rounded border border-slate-800 bg-slate-950 p-3 text-[11px] leading-5 text-slate-400">
+                  <div>
+                    <span className="font-black uppercase text-slate-500">Project</span>{' '}
+                    <span className="font-mono text-slate-200">{renderPaths.project}</span>
+                  </div>
+                  <div>
+                    <span className="font-black uppercase text-slate-500">EDL</span>{' '}
+                    <span className="font-mono text-slate-200">{renderPaths.edl}</span>
+                  </div>
+                  <div>
+                    <span className="font-black uppercase text-slate-500">Prompt</span>{' '}
+                    <span className="font-mono text-slate-200">{renderPaths.prompt}</span>
+                  </div>
+                </div>
+              )}
+              <textarea
+                readOnly
+                value={renderPrompt}
+                className="min-h-[360px] w-full rounded border border-slate-800 bg-slate-950 p-3 font-mono text-[11px] leading-5 text-slate-200 outline-none"
+              />
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[11px] leading-5 text-slate-500">
+                  Final rendering remains explicit. Local media, transcripts, project JSON, and output MP4s stay out of git.
+                </p>
+                <button
+                  onClick={copyRenderPrompt}
+                  className="inline-flex items-center gap-2 rounded bg-cyan-400 px-4 py-2 text-xs font-black text-slate-950 hover:bg-cyan-300"
+                >
+                  <Copy size={14} />
+                  {renderCopied ? 'Copied' : 'Copy prompt'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {renderError && (
+        <div className="fixed bottom-4 left-1/2 z-[130] -translate-x-1/2 rounded border border-rose-300/45 bg-rose-950 px-4 py-3 text-xs font-bold text-rose-100 shadow-lg">
+          {renderError}
         </div>
       )}
     </section>

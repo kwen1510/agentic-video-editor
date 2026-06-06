@@ -53,6 +53,13 @@ const rangeFromClip = (clip: Clip, cursor: number): CodexEdlRange => {
   };
 };
 
+const assetPathForRender = (src: string) => {
+  if (/^https?:\/\//i.test(src)) {
+    return src;
+  }
+  return publicPathToDisk(src);
+};
+
 export const buildCodexEdl = (project: TimelineProject): CodexEdl => {
   if (!project.sourceVideo) {
     throw new Error('Cannot build EDL without a source video');
@@ -62,7 +69,7 @@ export const buildCodexEdl = (project: TimelineProject): CodexEdl => {
   const sourceVideos = project.sourceVideos?.length ? project.sourceVideos : [project.sourceVideo];
   const sourceEntries = sourceVideos.map((source, index) => {
     const key = source.name ?? source.id ?? source.src.split('/').at(-1) ?? `source_${index + 1}`;
-    return [key, publicPathToDisk(source.src)] as const;
+    return [key, assetPathForRender(source.src)] as const;
   });
   const ranges: CodexEdlRange[] = [];
 
@@ -105,7 +112,7 @@ export const buildCodexEdl = (project: TimelineProject): CodexEdl => {
     layers: project.layers,
     music: project.music.map((track) => ({
       ...track,
-      diskPath: publicPathToDisk(track.src),
+      diskPath: assetPathForRender(track.src),
     })),
     captions: project.layers.filter((layer) => layer.type === 'caption'),
     totalDurationSeconds: getTimelineDuration(project),

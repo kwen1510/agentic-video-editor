@@ -28,6 +28,11 @@ type ImportBody = {
   tags?: string[];
 };
 
+type ParsedImportRequest = {
+  body: ImportBody;
+  file: File | null;
+};
+
 const extensionFromContentType = (contentType: string) => {
   if (contentType.includes('mpeg')) {
     return '.mp3';
@@ -65,8 +70,53 @@ const writeManifest = async (manifest: MusicManifestItem[]) => {
   await fs.writeFile(localMusicManifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 };
 
+const booleanFromField = (value: FormDataEntryValue | null) => value === 'true' || value === 'on' || value === '1';
+
+const stringFromField = (value: FormDataEntryValue | null) => (typeof value === 'string' ? value : undefined);
+
+const parseImportRequest = async (request: Request): Promise<ParsedImportRequest> => {
+  const contentType = request.headers.get('content-type') ?? '';
+  if (!contentType.includes('multipart/form-data')) {
+    return {
+      body: (await request.json()) as ImportBody,
+      file: null,
+    };
+  }
+
+  const form = await request.formData();
+  const fileField = form.get('file');
+  return {
+    body: {
+      name: stringFromField(form.get('name')),
+      artist: stringFromField(form.get('artist')),
+      downloadUrl: stringFromField(form.get('downloadUrl')),
+      sourceUrl: stringFromField(form.get('sourceUrl')),
+      mood: stringFromField(form.get('mood')),
+      bpm: Number(stringFromField(form.get('bpm')) ?? 0),
+      style: stringFromField(form.get('style')),
+      vocal: stringFromField(form.get('vocal')) as MusicManifestItem['vocal'],
+      energy: stringFromField(form.get('energy')) as MusicManifestItem['energy'],
+      licenseType: stringFromField(form.get('licenseType')),
+      licenseUrl: stringFromField(form.get('licenseUrl')),
+      attributionRequired: booleanFromField(form.get('attributionRequired')),
+      attribution: stringFromField(form.get('attribution')),
+      licenseConfirmed: booleanFromField(form.get('licenseConfirmed')),
+      tags: stringFromField(form.get('tags'))
+        ?.split(',')
+        .map((tag) => tag.trim())
+        .filter(Boolean),
+    },
+    file: typeof File !== 'undefined' && fileField instanceof File ? fileField : null,
+  };
+};
+
+const importedFileName = (body: ImportBody, extension: string) => {
+  const baseName = sanitizeFileName(`${body.artist ? `${body.artist}-` : ''}${body.name}`);
+  return `${Date.now()}-${baseName}${extension}`;
+};
+
 export async function POST(request: Request) {
-  const body = (await request.json()) as ImportBody;
+  const {body, file} = await parseImportRequest(request);
 
   if (!body.licenseConfirmed) {
     return NextResponse.json({error: 'Confirm the track license before importing.'}, {status: 400});
@@ -74,8 +124,8 @@ export async function POST(request: Request) {
   if (!body.name?.trim()) {
     return NextResponse.json({error: 'Track name is required.'}, {status: 400});
   }
-  if (!body.downloadUrl?.trim()) {
-    return NextResponse.json({error: 'A direct audio download URL is required.'}, {status: 400});
+  if (!file && !body.downloadUrl?.trim()) {
+    return NextResponse.json({error: 'Choose a local audio file or provide a direct audio download URL.'}, {status: 400});
   }
   if (!body.licenseType?.trim()) {
     return NextResponse.json({error: 'License type is required.'}, {status: 400});
@@ -84,41 +134,60 @@ export async function POST(request: Request) {
     return NextResponse.json({error: 'Attribution text is required for this license.'}, {status: 400});
   }
 
-  let url: URL;
-  try {
-    url = new URL(body.downloadUrl);
-  } catch {
-    return NextResponse.json({error: 'Download URL is invalid.'}, {status: 400});
-  }
-  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-    return NextResponse.json({error: 'Only http/https audio URLs are supported.'}, {status: 400});
+  let bytes: Buffer;
+  let extension = '';
+
+  if (file) {
+    if (file.size > maxBytes) {
+      return NextResponse.json({error: 'Audio file is larger than 75 MB.'}, {status: 400});
+    }
+    const fileExtension = path.extname(file.name).toLowerCase();
+    const fileType = file.type.toLowerCase();
+    extension = audioExtensions.has(fileExtension) ? fileExtension : extensionFromContentType(fileType);
+    if (!extension || (!fileType.startsWith('audio/') && !audioExtensions.has(fileExtension))) {
+      return NextResponse.json({error: 'Choose an audio file such as MP3, WAV, M4A, OGG, AAC, or FLAC.'}, {status: 400});
+    }
+    bytes = Buffer.from(await file.arrayBuffer());
+  } else {
+    let url: URL;
+    try {
+      url = new URL(body.downloadUrl ?? '');
+    } catch {
+      return NextResponse.json({error: 'Download URL is invalid.'}, {status: 400});
+    }
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+      return NextResponse.json({error: 'Only http/https audio URLs are supported.'}, {status: 400});
+    }
+
+    const response = await fetch(url, {redirect: 'follow'});
+    if (!response.ok) {
+      return NextResponse.json({error: `Could not download audio: ${response.status}`}, {status: 400});
+    }
+
+    const responseContentType = response.headers.get('content-type')?.toLowerCase() ?? '';
+    const contentLength = Number(response.headers.get('content-length') ?? 0);
+    if (contentLength > maxBytes) {
+      return NextResponse.json({error: 'Audio file is larger than 75 MB.'}, {status: 400});
+    }
+
+    const urlExtension = path.extname(url.pathname).toLowerCase();
+    extension = audioExtensions.has(urlExtension) ? urlExtension : extensionFromContentType(responseContentType);
+    if (
+      !extension ||
+      (!responseContentType.startsWith('audio/') && !audioExtensions.has(urlExtension) && responseContentType !== 'application/octet-stream')
+    ) {
+      return NextResponse.json({error: 'The URL must point directly to an audio file.'}, {status: 400});
+    }
+
+    bytes = Buffer.from(await response.arrayBuffer());
   }
 
-  const response = await fetch(url, {redirect: 'follow'});
-  if (!response.ok) {
-    return NextResponse.json({error: `Could not download audio: ${response.status}`}, {status: 400});
-  }
-
-  const contentType = response.headers.get('content-type')?.toLowerCase() ?? '';
-  const contentLength = Number(response.headers.get('content-length') ?? 0);
-  if (contentLength > maxBytes) {
-    return NextResponse.json({error: 'Audio file is larger than 75 MB.'}, {status: 400});
-  }
-
-  const urlExtension = path.extname(url.pathname).toLowerCase();
-  const extension = audioExtensions.has(urlExtension) ? urlExtension : extensionFromContentType(contentType);
-  if (!extension || (!contentType.startsWith('audio/') && !audioExtensions.has(urlExtension) && contentType !== 'application/octet-stream')) {
-    return NextResponse.json({error: 'The URL must point directly to an audio file.'}, {status: 400});
-  }
-
-  const bytes = Buffer.from(await response.arrayBuffer());
   if (bytes.length > maxBytes) {
     return NextResponse.json({error: 'Audio file is larger than 75 MB.'}, {status: 400});
   }
 
   await fs.mkdir(musicImportsDir, {recursive: true});
-  const baseName = sanitizeFileName(`${body.artist ? `${body.artist}-` : ''}${body.name}`);
-  const fileName = `${Date.now()}-${baseName}${extension}`;
+  const fileName = importedFileName(body, extension);
   const diskPath = path.join(musicImportsDir, fileName);
   await fs.writeFile(diskPath, bytes);
 
@@ -127,7 +196,7 @@ export async function POST(request: Request) {
     name: body.name.trim(),
     artist: body.artist?.trim() || undefined,
     src: `/music/imports/${fileName}`,
-    sourceUrl: body.sourceUrl?.trim() || body.downloadUrl.trim(),
+    sourceUrl: body.sourceUrl?.trim() || body.downloadUrl?.trim() || undefined,
     mood: body.mood?.trim() || body.style?.trim() || 'creator',
     bpm: Number.isFinite(body.bpm) ? Number(body.bpm) : 0,
     licence: body.licenseType.trim(),

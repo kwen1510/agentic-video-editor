@@ -19,6 +19,7 @@ Use this skill to:
 - Preview and tweak in the local editor.
 - Use Remotion template presets for openers, captions, overlays, and transitions.
 - Suggest music direction from curated briefs before importing tracks.
+- Hand the exact preview state back to Codex for final render.
 - Render only when the user explicitly asks for export.
 
 ## Hard Rules
@@ -32,6 +33,7 @@ Use this skill to:
 7. Use short fades at clip boundaries to avoid audio pops.
 8. Keep sample/demo footage out of public repository commits.
 9. Do not assume music is safe because it is "free" or "royalty free"; require source URL, license, and attribution text.
+10. Treat the editor as a minimal correction surface. Codex should still make the main edit decisions.
 
 ## Public Repository Layout
 
@@ -74,14 +76,17 @@ public/uploads/                 Local user uploads, ignored by git
    - music volume automation
    - fades/transitions
 
+   Codex should populate this JSON directly where possible. The preview editor is mainly for checking the result, dragging clips left/right, trimming clip handles, editing captions, muting source audio, previewing music, and adjusting music volume.
+
 5. Choose music:
    - Use `src/lib/music/catalog.ts` for music brief presets.
    - Pick a brief based on tone, platform, speech density, and target age/audience.
+   - Use `youtube-audio-library-import` when the user wants official YouTube Audio Library discovery or manual import guidance.
    - Prefer instrumental tracks for speech-heavy videos.
    - Keep music volume low by default, usually 0.16-0.24 under speech.
    - Enable ducking under speech unless the user explicitly wants a music-led edit.
    - For no-speech sections, use a `volumeAutomation` graph instead of one flat music level.
-   - Set no-speech music near 0.8-1.0, speech bed near 0.16-0.24, and ramp over roughly 0.5-0.8 seconds.
+   - Set no-speech music near 0.75-0.9, speech bed near 0.16-0.24, and ramp over roughly 0.25-0.5 seconds.
    - Capture title, artist, source URL, license URL, and attribution in timeline JSON.
    - If the user wants no attribution, ask them to confirm a paid/no-attribution license or choose a CC0/public-domain source.
 
@@ -89,12 +94,51 @@ public/uploads/                 Local user uploads, ignored by git
    - Run the local Next.js app.
    - Use the preview/editor for small manual changes.
    - Do not render MP4 while iterating.
+   - The app autosaves the current edit to browser local storage as a safety net.
+   - Explain the main surfaces if the user is new:
+     - Preview area: live video, captions, overlays, opener, ending.
+     - Composite timeline: source rows, fixed caption row, separate music channel, transitions, ending block.
+     - Left rails: mute source audio, hear music, and keep audio separate from visual tracks.
+     - Music panel/workspace: preview attributed tracks and adjust the speech bed graph.
+     - Template workspace: preview Remotion opener, caption, transition, and ending ideas.
 
 7. Export only on request:
    - Export timeline JSON.
    - Export captions.
    - Render final MP4 with Remotion/FFmpeg.
    - Run boundary diagnostics before showing the final render.
+
+## Editor Handoff
+
+Use the editor when the user needs to inspect or lightly correct the result. Avoid asking them to rebuild the edit manually.
+
+Recommended pattern:
+
+1. Codex creates or updates the timeline JSON.
+2. Launch the editor and load the project.
+3. Ask the user to check only the necessary controls:
+   - move clip blocks left/right
+   - trim clip starts/ends
+   - click a caption once to edit text
+   - click a clip to adjust source volume or mute
+   - click music to adjust music volume and speech bed
+4. After the user is satisfied, tell them to click **Render with Codex**.
+5. Read the generated `projects/*.render-project.json` and `projects/*.render-edl.json`.
+6. Render exactly that state. Do not reselect clips or change timing unless the files are internally invalid.
+
+The render prompt created by the app is acceptable as the next Codex instruction. It includes paths and a serialized EDL with source ranges, caption layers, transitions, music automation, attribution, and total duration.
+
+## Populating The Editor
+
+When preparing a project for preview:
+
+- Create source entries with stable `src`, `name`, `duration`, `volume`, and `muted`.
+- Create clips with `rawStart`, `rawEnd`, `safeStart`, `safeEnd`, `timelineStart`, and `volume`.
+- Link captions to clips with `clipId` and segment ids where available.
+- Keep captions on the caption channel; do not move them into source channels.
+- Keep music on the music channel; do not mix music into visual clips in preview JSON.
+- Store required music attribution on the music track so final export can create ending credits or description text.
+- Use local project JSON or app APIs for persistence; never commit private project JSON.
 
 ## Template Selection
 

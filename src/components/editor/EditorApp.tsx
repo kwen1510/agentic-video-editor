@@ -7,13 +7,51 @@ import {TimelinePanel} from './TimelinePanel';
 import {useEditorStore} from '@/store/editorStore';
 import type {TimelineProject, TranscriptResult, TranscriptThought} from '@/types/timeline';
 
+const localStateKey = 'agentic-video-editor:autosave:v1';
+
+type SavedEditorState = {
+  savedAt: string;
+  project: TimelineProject;
+  transcript: TranscriptResult | null;
+  thoughts: TranscriptThought[];
+};
+
+const hasRestorableProject = (project: TimelineProject) =>
+  Boolean(project.sourceVideo || project.sourceVideos?.length || project.clips.length || project.layers.length || project.music.length);
+
 export const EditorApp: React.FC = () => {
   const project = useEditorStore((state) => state.project);
+  const transcript = useEditorStore((state) => state.transcript);
+  const thoughts = useEditorStore((state) => state.thoughts);
   const setProject = useEditorStore((state) => state.setProject);
   const setSourceVideo = useEditorStore((state) => state.setSourceVideo);
   const setTranscript = useEditorStore((state) => state.setTranscript);
   const setThoughts = useEditorStore((state) => state.setThoughts);
   const didAutoLoad = useRef(false);
+  const didHydrateLocalState = useRef(false);
+
+  useEffect(() => {
+    if (didHydrateLocalState.current) {
+      return;
+    }
+    didHydrateLocalState.current = true;
+
+    try {
+      const raw = window.localStorage.getItem(localStateKey);
+      if (!raw) {
+        return;
+      }
+      const saved = JSON.parse(raw) as SavedEditorState;
+      if (saved.project?.projectId && hasRestorableProject(saved.project)) {
+        didAutoLoad.current = true;
+        setProject(saved.project);
+        setTranscript(saved.transcript ?? null);
+        setThoughts(saved.thoughts ?? []);
+      }
+    } catch {
+      // Ignore invalid saved state and fall back to local media discovery.
+    }
+  }, [setProject, setThoughts, setTranscript]);
 
   useEffect(() => {
     if (project.sourceVideo || didAutoLoad.current) {
@@ -60,6 +98,24 @@ export const EditorApp: React.FC = () => {
 
     void loadFirstAvailableProject();
   }, [project.sourceVideo, setProject, setSourceVideo, setThoughts, setTranscript]);
+
+  useEffect(() => {
+    if (!didHydrateLocalState.current || !hasRestorableProject(project)) {
+      return;
+    }
+
+    try {
+      const saved: SavedEditorState = {
+        savedAt: new Date().toISOString(),
+        project,
+        transcript,
+        thoughts,
+      };
+      window.localStorage.setItem(localStateKey, JSON.stringify(saved));
+    } catch {
+      // Local storage is a safety net; JSON file save/export still works if it is unavailable.
+    }
+  }, [project, thoughts, transcript]);
 
   return (
     <main className="grid h-screen min-h-0 grid-cols-[minmax(0,1fr)_auto] bg-[#0d1117] text-slate-100">

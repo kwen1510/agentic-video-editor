@@ -61,7 +61,7 @@ const trackJson = (track: MusicManifestItem) => ({
     },
     mix: {
       useVolumeGraph: true,
-      noSpeechVolume: track.id === 'carefree-kevin-macleod' ? 1 : 0.8,
+      noSpeechVolume: track.energy === 'high' ? 0.9 : 0.75,
       speechBedVolume: 0.18,
       fadeIn: 1.25,
       fadeOut: 2,
@@ -71,7 +71,7 @@ const trackJson = (track: MusicManifestItem) => ({
 
 const localTrackRank = (track: MusicManifestItem) => {
   const searchable = `${track.id} ${track.name} ${track.mood} ${track.style ?? ''} ${track.energy ?? ''} ${(track.tags ?? []).join(' ')}`.toLowerCase();
-  if (track.id === 'carefree-kevin-macleod' || searchable.includes('short') || track.energy === 'high') {
+  if (track.id === 'moonpurr-paper-airplane-parade' || searchable.includes('short') || track.energy === 'high') {
     return 0;
   }
   if (searchable.includes('positive') || track.mood === 'positive') {
@@ -118,15 +118,15 @@ export const MusicWorkspace: React.FC = () => {
     () => [
       {
         title: 'Best Starting Points',
-        ids: ['openverse-audio', 'free-music-archive', 'dig-ccmixter'],
+        ids: ['youtube-audio-library', 'moonpurr', 'free-music-archive'],
       },
       {
         title: 'Reliable Attribution Libraries',
-        ids: ['incompetech', 'moonpurr', 'anvil-island'],
+        ids: ['dig-ccmixter', 'openverse-audio', 'anvil-island'],
       },
       {
         title: 'Platform / Creator Libraries',
-        ids: ['youtube-audio-library', 'bensound'],
+        ids: ['bensound', 'incompetech'],
       },
     ],
     [],
@@ -222,7 +222,7 @@ export const MusicWorkspace: React.FC = () => {
       energy: track.energy ?? (track.mood === 'positive' ? 'high' : 'medium'),
       start: 0,
       end: timelineDuration,
-      volume: track.id === 'carefree-kevin-macleod' ? 0.18 : 0.22,
+      volume: 0.2,
       fadeIn: 1.25,
       fadeOut: 2,
       duckUnderSpeech: true,
@@ -231,7 +231,7 @@ export const MusicWorkspace: React.FC = () => {
     return {
       ...baseTrack,
       volumeAutomation: createSpeechAwareMusicAutomation(project, baseTrack, {
-        focusVolume: track.id === 'carefree-kevin-macleod' ? 1 : 0.8,
+        focusVolume: track.energy === 'high' ? 0.9 : 0.75,
         backgroundVolume: baseTrack.volume,
         rampDuration: 0.35,
         mode: 'smooth-gaps',
@@ -306,7 +306,7 @@ export const MusicWorkspace: React.FC = () => {
                       <h2 className="text-sm font-black text-slate-100">{track.name}</h2>
                       <span className="rounded bg-cyan-400/10 px-2 py-1 text-[10px] font-black uppercase text-cyan-200">{track.mood}</span>
                       <span className="rounded bg-slate-800 px-2 py-1 text-[10px] font-black uppercase text-slate-400">{track.bpm} bpm</span>
-                      {track.id === 'carefree-kevin-macleod' && (
+                      {track.id === 'moonpurr-paper-airplane-parade' && (
                         <span className="rounded bg-amber-300 px-2 py-1 text-[10px] font-black uppercase text-slate-950">Short-form pick</span>
                       )}
                     </div>
